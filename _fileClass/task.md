@@ -10,6 +10,11 @@ extends:
 savedViews: []
 favoriteView:
 fieldsOrder:
+  - PPd9ek
+  - 1XfjxF
+  - kNjGH7
+  - qJDmTc
+  - EXyXRf
   - aFd3Xx
   - jMBBlX
   - HHBUBL
@@ -17,13 +22,11 @@ fieldsOrder:
   - Zctuwb
   - HvUTLv
   - jFmSHC
-  - OytCoE
   - ijPJ65
   - ainYKk
-  - vEMRHR
   - MUtO0S
   - GQpBlY
-version: "2.45"
+version: "2.46"
 fields:
   - name: name
     type: Input

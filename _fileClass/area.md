@@ -41,14 +41,14 @@ fields:
     options:
       sourceType: ValuesList
       valuesList:
-        "1": ❤️ Health & Wellness
-        "2": 🏖 Leisure & Recreation
-        "3": 🤝 Social & Relationships
-        "4": 💼 Career & Jobs
-        "5": 📚 Education & Development
-        "6": 💵 Economy & Finances
-        "7": 🏡 Home & Environment
-        "8": 🧘🏻‍♂️ Personal & Purpose
+        "1": ❤️ Health
+        "2": 🏖 Leisure
+        "3": 🤝 Social
+        "4": 💼 Career
+        "5": 📚 Growth
+        "6": 💵 Wealth
+        "7": 🏡 Space
+        "8": 🧘🏻‍♂️ Self
     path: ""
     id: t7XgG6
   - name: modifiedDate
