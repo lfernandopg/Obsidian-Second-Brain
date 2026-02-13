@@ -1,3 +1,17 @@
-.obsidian
+# .gitignore (Versión rama develop)
+.obsidian/
 .backup/
 .stfolder/
+
+# Ignorar carpetas de contenido personal
+20 - Areas/
+30 - Resources/
+40 - Archives/
+50 - Tasks/
+60 - Daily Notes/
+
+# Mantener solo lo estructural y código
+!_scripts/
+!_templates/
+!_fileClass/
+!_config/
