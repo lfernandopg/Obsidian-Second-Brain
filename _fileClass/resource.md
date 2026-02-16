@@ -112,12 +112,8 @@ fields:
   - name: referenceStatus
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "2": ⚪️ Inbox
-        "3": 🔵 To Review
-        "4": 🟡 Under Review
-        "5": 🟢 Reviewed
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").referenceStatusMap)
     path: ""
     id: ndlIJ8
   - name: url
@@ -128,39 +124,15 @@ fields:
   - name: type
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": 📰 Article
-        "2": 📄 Paper / Investigation
-        "3": 📚 Book
-        "4": ✍️ Essay
-        "5": 📝 Note
-        "6": 📓 Notebook
-        "7": 🧭 Guide
-        "8": 💻 Code
-        "9": 🤖 AI Generated
-        "10": 💬 Prompt
-        "11": 📊 Report
-        "12": 📁 Document
-        "13": 🎥 Video
-        "14": 🖼️ Image
-        "15": 🎙️ Podcast
-        "16": 👩‍🏫 Lecture
-        "17": 🎓 Course
-        "18": 💻 Presentation
-        "19": 🗣️ Discussion
-      valuesListNotePath: 00 - Templates/Resource/Type - Values.md
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").resourceTypeMap)
     path: ""
     id: khRvLh
   - name: location
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": 📦 Local File
-        "2": 🌐 Web URL
-        "3": 📝 Obsidian Note
-        "4": 🗃️ Physical Resource
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").sourceTypeMap)
     path: ""
     id: yqGIjP
   - name: author
@@ -179,13 +151,8 @@ fields:
   - name: creationStatus
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "2": ⚪️ Inbox
-        "3": 🟡 Draft
-        "4": 🟢 Completed
-        "5": 🔵 Updated
-        "6": 🌐 Published
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").creationStatusMap)
     path: ""
     id: yTf7C1
   - name: source

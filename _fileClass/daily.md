@@ -65,21 +65,8 @@ fields:
   - name: mood
     type: Multi
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": 🧘 Sereno
-        "2": 🌅 Optimista
-        "3": 🚀 Motivado
-        "4": 😄 Alegre
-        "5": 🫶 Afectivo
-        "6": 😤 Frustrado
-        "7": 🪫 Apatico
-        "8": 😰 Ansioso
-        "9": 😠 Irritable
-        "10": 😞 Triste
-        "11": 😔 Culpable
-        "12": 🌧️ Melancolico
-        "13": 🤒 Enfermo
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").moodMap)
     path: ""
     id: hLgIkK
   - name: yesterdayBedTime
@@ -94,106 +81,64 @@ fields:
   - name: sleepQuality
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": 1 - 🧟 Pesima
-        "2": 2 - 😴 Mala
-        "3": 3 - 😐 Regular
-        "4": 4 - 👍 Buena
-        "5": 5 - ✨ Excelente
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").sleepQualityMap)
     path: ""
     id: v2YRD0
   - name: dietQuality
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": 1 - 🗑️ Desastrosa
-        "2": 2 - 🍕 Mala
-        "3": 3 - 🍲Regular
-        "4": 4 - 🥗 Buena
-        "5": 5 - 🥦 Óptima
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").dietQualityMap)
     path: ""
     id: e0rNAY
   - name: hydrationLevel
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": 1 - 🌵 Deshidratado
-        "2": 2 - 💧 Regular
-        "3": 3 - 🌊 Hidratado
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").hydrationLevelMap)
     path: ""
     id: gRRxFL
   - name: exerciseLevel
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": 0 - 🛋️ Nulo
-        "2": 1 - 🐢 Bajo
-        "3": 2 - 🚶 Regular
-        "4": 3 - 🏋️ Alto
-        "5": 4 - 🏆 Excepcional
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").exerciseLevelMap)
     path: ""
     id: 5ZrbAx
   - name: sunlightExposure
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": 0 - 🌑 Nula
-        "2": 1 - 🌥️ Baja (<10 min)
-        "3": 2 - 🌤️ Normal (10-30 min)
-        "4": 3 - ☀️ Alta (>30 min)
-        "5": 4 - 🥵 Insolacion
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").sunlightExposureMap)
     path: ""
     id: PgbXo7
   - name: hygieneLevel
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": 0 - 🤢 Nula
-        "2": 1 - 😷 Baja
-        "3": 2 - 🧼 Normal
-        "4": 3 - 🛀🏻 Alta
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").hygieneLevelMap)
     path: ""
     id: VBppSh
   - name: energyLevel
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": 1 - 🪫 Muy baja
-        "2": 2 - 🥱 Baja
-        "3": 3 - 😐 Regular
-        "4": 4 - 🚀 Alta
-        "5": 5 - ⚡ Muy alta
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").energyLevelMap)
     path: ""
     id: sszPx0
   - name: vitalityLevel
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": 1 - 💀 Muy baja
-        "2": 2 - 👇🏼 Baja
-        "3": 3 - 😌 Normal
-        "4": 4 - 🍆 Alta
-        "5": 5 - 🔥 Muy alta
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").vitalityLevelMap)
     path: ""
     id: PF04PK
   - name: focusLevel
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": 1 - 🦋 Súper distraído
-        "2": 2 - 😵‍💫 Distraído
-        "3": 3 - 😐 Normal
-        "4": 4 - 🧐 Concentrado
-        "5": 5 - 🎯 Súper enfocado
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").focusLevelMap)
     path: ""
     id: P16w3v
   - name: meditationMinutes
@@ -206,37 +151,22 @@ fields:
   - name: selfControlLevel
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": 1 - 🎢 Muy bajo
-        "2": 2 - 🚦Bajo
-        "3": 3 - ⚖️ Normal
-        "4": 4 - 💪 Alto
-        "5": 5 - 👑 Muy alto
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").selfControlLevelMap)
     path: ""
     id: TjBbEk
   - name: environmentCareLevel
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": 1 - 💩 Muy bajo
-        "2": 2 - 🏚️ Bajo
-        "3": 3 - 🧹 Normal
-        "4": 4 - 🏡 Alto
-        "5": 5 - 💎 Muy alto
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").environmentCareLevelMap)
     path: ""
     id: hvnaJc
   - name: socialInteractionsQuality
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": 0 - 🚫 Nulas
-        "2": 1 - 👋 Limitadas
-        "3": 2 - 😊 Satisfactorias
-        "4": 3 - ✨ Bastantes
-        "5": 4 - 💖 Excepcionales
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").socialInteractionsQualityMap)
     path: ""
     id: rRlGAI
   - name: workHours
@@ -271,58 +201,36 @@ fields:
   - name: pmoLapse
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": 0 - ✅ Nulo
-        "2": 1 - 🤏 Poco
-        "3": 2 - 🔁 Bastante
-        "4": 3 - 🌪️ Desenfrenado
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").pmoLapseMap)
     path: ""
     id: 9BWgu4
   - name: socialMediaExcess
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": 0 - ✅ Nulo
-        "2": 1 - 🤏 Poco
-        "3": 2 - ⏳ Bastante
-        "4": 3 - 😵 Desenfrenado
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").socialMediaExcessMap)
     path: ""
     id: mqIpGa
   - name: tradingLevel
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": 0 - ❌ Nulo
-        "2": 1 - 🤦‍♂️ Desastre
-        "3": 2 - ⚠️ Malo
-        "4": 3 - ⚖️ Neutral
-        "5": 4 - 🚀 Bueno
-        "6": 5 - 🏆 Excelente
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").tradingLevelMap)
     path: ""
     id: q89K2D
   - name: gratitudeLevel
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": 0 - 😔 Ausente
-        "2": 1 - 😌 Reconocida
-        "3": 2 - 😊 Consciente
-        "4": 3 - 🙏 Intensa
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").gratitudeLevelMap)
     path: ""
     id: ipoV9j
   - name: sensoryLevel
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": 0 - 😵‍💫 Desconectado
-        "2": 1 - 👁️ Casual
-        "3": 2 - 🌿 Atento
-        "4": 3 - ✨ Totalmente Presente
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").sensoryLevelMap)
     path: ""
     id: S14iNH
   - name: archived

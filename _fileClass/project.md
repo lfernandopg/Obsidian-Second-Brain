@@ -24,14 +24,8 @@ fields:
   - name: status
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": ⚪️ Inbox
-        "2": 🔵 Planned
-        "3": 🟡 In progress
-        "4": 🔴 Blocked
-        "5": 🟢 Done
-        "6": ⛔ Canceled
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").statusMap)
     path: ""
     id: 6fZsKZ
   - name: startDate
@@ -87,12 +81,8 @@ fields:
   - name: priority
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": ⚪️ Low
-        "2": 🔵 Medium
-        "3": 🟡 High
-        "4": 🔴 Critical
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").priorityMap)
     path: ""
     id: obt0T5
   - name: createdDate

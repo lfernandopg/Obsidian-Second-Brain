@@ -2,13 +2,13 @@
 limit: 20
 mapWithTag: true
 icon: grid
-tagNames: 
-filesPaths: 
-bookmarksGroups: 
-excludes: 
-extends: 
+tagNames:
+filesPaths:
+bookmarksGroups:
+excludes:
+extends:
 savedViews: []
-favoriteView: 
+favoriteView:
 fieldsOrder:
   - x49Ku7
   - 7uYlZ2
@@ -16,7 +16,7 @@ fieldsOrder:
   - t7XgG6
   - 059uBv
   - D7e3lJ
-version: "2.25"
+version: "2.26"
 fields:
   - name: createdDate
     type: DateTime
@@ -39,16 +39,8 @@ fields:
   - name: category
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": ❤️ Health
-        "2": 🏖 Leisure
-        "3": 🤝 Social
-        "4": 💼 Career
-        "5": 📚 Growth
-        "6": 💵 Wealth
-        "7": 🏡 Space
-        "8": 🧘🏻‍♂️ Self
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").areasMap)
     path: ""
     id: t7XgG6
   - name: modifiedDate

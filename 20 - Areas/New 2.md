@@ -1,9 +1,9 @@
 ---
 fileClass: area
-category: 
+category:
 aliases:
-createdDate: <% tp.date.now("MMM DD, yy - HH:mm") %>
-modifiedDate:
+createdDate: Feb 13, 2026 - 10:53
+modifiedDate: Feb 13, 2026 - 11:02
 favorite: false
 archived: false
 ---

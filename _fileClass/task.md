@@ -104,26 +104,15 @@ fields:
   - name: priority
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": ⚪️ Low
-        "2": 🔵 Medium
-        "3": 🟡 High
-        "4": 🔴 Critical
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").priorityMap)
     path: ""
     id: jMBBlX
   - name: size
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": 1 - 📌 Very Small
-        "2": 2 - 📝 Small
-        "3": 3 - 📁 Medium
-        "4": 5 - 📚 Large
-        "5": 8 - 📦 Very Large
-        "6": 13 - 🏗️ Huge
-        "7": 21 - 🚀 Epic
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").sizeMap)
     path: ""
     id: aFd3Xx
   - name: parentTask
@@ -175,14 +164,8 @@ fields:
   - name: status
     type: Select
     options:
-      sourceType: ValuesList
-      valuesList:
-        "1": ⚪️ Inbox
-        "2": 🔵 To Do
-        "3": 🟡 In Progress
-        "4": 🔴 Blocked
-        "5": 🟢 Done
-        "6": ⛔ Canceled
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").statusMap)
     path: ""
     id: PPd9ek
 ---
