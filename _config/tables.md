@@ -14,4 +14,7 @@ activeTasks:
 doneTasks:
   headers: ["📝 Tasks", "🗓 Start", "🗓 End", "🎯 Deadline", "📐 Size", "⬆️ Priority", "🗃"]
   fields: ["fileLink", "startDate", "endDate", "deadlineDate", "size", "priority", "archiveButton"]
+areaResources:
+  headers: ["📚 Resource", "🏷️ Type", "📍 Status", "👤 Author", "🗃"]
+  fields: ["fileLink", "type", "referenceStatus", "author", "archiveButton"]
 ---

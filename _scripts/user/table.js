@@ -86,4 +86,22 @@ class Table {
             dv.table(tableConfig.headers, tasks.map(p => this._buildRow(dv, p, tableConfig.fields, Utils, f)));
         }
     }
+
+    showResourcesByArea(dv, area, resourceFolder, Utils) {
+        const {fieldModifier: f} = app.plugins.plugins['metadata-menu'].api;
+        const config = customJS.FileClassMapper;
+        const tableConfig = config.TABLES_CONFIG.areaResources;
+
+        //areaResources:
+        //headers: ["📚 Resource", "🏷️ Type", "📍 Status", "👤 Author", "🗃"]
+        //fields: ["fileLink", "type", "referenceStatus", "author", "archiveButton"]
+
+        const resources = dv.pages(`"${resourceFolder}"`)
+            .where(p => p.fileClass === "resource" && p.area && p.area.path === area.file.path);
+        
+        if (resources.length > 0) {
+            dv.header(3, `📚 Resources`);
+            dv.table(tableConfig.headers, resources.map(p => this._buildRow(dv, p, tableConfig.fields, Utils, f)));
+        }
+    }    
 }

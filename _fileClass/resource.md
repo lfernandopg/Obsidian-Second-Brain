@@ -24,7 +24,7 @@ fieldsOrder:
   - cOJoiz
   - Lors4O
   - khRvLh
-version: "2.59"
+version: "2.60"
 fields:
   - name: createdDate
     type: DateTime
@@ -56,10 +56,7 @@ fields:
     id: CSeZmq
   - name: tags
     type: Multi
-    options:
-      sourceType: ValuesList
-      valuesList: {}
-      valuesListNotePath: 00 - Templates/Resource/Topics - Values.md
+    options: {}
     path: ""
     id: BU14u5
   - name: areas
