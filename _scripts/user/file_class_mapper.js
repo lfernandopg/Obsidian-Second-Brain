@@ -12,28 +12,28 @@ class FileClassMapper {
         //this.ARCHIVES_FOLDER = FileClassMapper.ARCHIVES_FOLDER;
 
         this.SETTINGS_PATH = '_config/settings.md';
-        const file = app.vault.getAbstractFileByPath(this.SETTINGS_PATH);
-        if (!file) throw new Error(`Not found file: ${this.SETTINGS_PATH}`);
-        const metadata = app.metadataCache.getFileCache(file)?.frontmatter;
+        const settingsFile = app.vault.getAbstractFileByPath(this.SETTINGS_PATH);
+        if (!settingsFile) throw new Error(`Not found file: ${this.SETTINGS_PATH}`);
+        const settingsMetadata = app.metadataCache.getFileCache(settingsFile)?.frontmatter;
         
-        this.FILE_CLASS_LIST = metadata?.fileClassList;
-        this.TEMPLATES_FOLDER = metadata?.templatesFolder;
-        this.PROJECTS_FOLDER = metadata?.projectsFolder;
-        this.AREAS_FOLDER = metadata?.areasFolder;
-        this.RESOURCES_FOLDER = metadata?.resourcesFolder;
-        this.ARCHIVES_FOLDER = metadata?.archivesFolder;
-        this.AUTHORS_FOLDER = metadata?.authorsFolder;
-        this.SOURCES_FOLDER = metadata?.sourcesFolder;
-        this.TASKS_FOLDER = metadata?.tasksFolder;
-        this.DAILIES_FOLDER = metadata?.dailiesFolder;
+        this.FILE_CLASS_LIST = settingsMetadata?.fileClassList;
+        this.TEMPLATES_FOLDER = settingsMetadata?.templatesFolder;
+        this.PROJECTS_FOLDER = settingsMetadata?.projectsFolder;
+        this.AREAS_FOLDER = settingsMetadata?.areasFolder;
+        this.RESOURCES_FOLDER = settingsMetadata?.resourcesFolder;
+        this.ARCHIVES_FOLDER = settingsMetadata?.archivesFolder;
+        this.AUTHORS_FOLDER = settingsMetadata?.authorsFolder;
+        this.SOURCES_FOLDER = settingsMetadata?.sourcesFolder;
+        this.TASKS_FOLDER = settingsMetadata?.tasksFolder;
+        this.DAILIES_FOLDER = settingsMetadata?.dailiesFolder;
 
-        this.AREA_TEMPLATE_FILENAME = metadata?.areaTemplateFileName;
-        this.PROJECT_TEMPLATE_FILENAME = metadata?.projectTemplateFileName;
-        this.RESOURCE_TEMPLATE_FILENAME = metadata?.resourceTemplateFileName;
-        this.TASK_TEMPLATE_FILENAME = metadata?.taskTemplateFileName;
-        this.AUTHOR_TEMPLATE_FILENAME = metadata?.authorTemplateFileName;
-        this.SOURCE_TEMPLATE_FILENAME = metadata?.sourceTemplateFileName;
-        this.DAILY_TEMPLATE_FILENAME = metadata?.dailyTemplateFileName;
+        this.AREA_TEMPLATE_FILENAME = settingsMetadata?.areaTemplateFileName;
+        this.PROJECT_TEMPLATE_FILENAME = settingsMetadata?.projectTemplateFileName;
+        this.RESOURCE_TEMPLATE_FILENAME = settingsMetadata?.resourceTemplateFileName;
+        this.TASK_TEMPLATE_FILENAME = settingsMetadata?.taskTemplateFileName;
+        this.AUTHOR_TEMPLATE_FILENAME = settingsMetadata?.authorTemplateFileName;
+        this.SOURCE_TEMPLATE_FILENAME = settingsMetadata?.sourceTemplateFileName;
+        this.DAILY_TEMPLATE_FILENAME = settingsMetadata?.dailyTemplateFileName;
 
         this.FOLDERS_MAP = {
             'area': `${this.AREAS_FOLDER}`,
@@ -130,6 +130,26 @@ class FileClassMapper {
             "nextDaily" : "Next Daily",
             "resource_in": "Child Resource",
         };
+
+        // --- 2. CARGAR VALUES (NUEVO) ---
+        this.VALUES_PATH = '_config/values.md';
+        const valuesFile = app.vault.getAbstractFileByPath(this.VALUES_PATH);
+        if (!valuesFile) throw new Error(`Not found file: ${this.VALUES_PATH}`);
+        const valuesMetadata = app.metadataCache.getFileCache(valuesFile)?.frontmatter;
+
+        // Mapear los diccionarios más utilizados en tus scripts
+        this.STATUS_MAP = valuesMetadata?.statusMap || {};
+        this.PRIORITY_MAP = valuesMetadata?.priorityMap || {};
+        this.SIZE_MAP = valuesMetadata?.sizeMap || {};
+        
+        // (Opcional) Exponer todo el objeto por si necesitas otros mapas menos comunes luego
+        this.ALL_VALUES = valuesMetadata || {};
+
+        // --- 3. CARGAR TABLES (NUEVO) ---
+        this.TABLES_PATH = '_config/tables.md';
+        const tablesFile = app.vault.getAbstractFileByPath(this.TABLES_PATH);
+        if (!tablesFile) throw new Error(`Not found file: ${this.TABLES_PATH}`);
+        this.TABLES_CONFIG = app.metadataCache.getFileCache(tablesFile)?.frontmatter || {};
     }
 
     getFolder = (fileClass) => {

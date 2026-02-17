@@ -21,15 +21,15 @@ module.exports = async (params) => {
             const startDate = new Date(metadata.startDate);
             startDate.setHours(0, 0, 0, 0);
             
-            if (startDate > today && metadata.status === "⚪️ Inbox") {
-                newStatus = "🔵 Planned";
-            } else if (startDate <= today && metadata.status === "🔵 Planned") {
-                newStatus = "🟡 In progress";
+            if (startDate > today && metadata.status === statusMap.inbox) {
+                newStatus = statusMap.planned;
+            } else if (startDate <= today && metadata.status === statusMap.planned) {
+                newStatus = statusMap.in_progress;
             }
         }
 
         // Si tiene deadline vencido y no está completado
-        if (metadata.deadlineDate && metadata.status !== "🟢 Done" && metadata.status !== "⛔ Canceled") {
+        if (metadata.deadlineDate && metadata.status !== statusMap.done && metadata.status !== statusMap.canceled) {
             const deadline = new Date(metadata.deadlineDate);
             deadline.setHours(0, 0, 0, 0);
             

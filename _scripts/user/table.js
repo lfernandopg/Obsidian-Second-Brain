@@ -1,115 +1,89 @@
 class Table {
 
+    // Función "traductora" dinámica para construir filas según el YAML
+    _buildRow(dv, p, fields, Utils, f) {
+        return fields.map(field => {
+            switch(field) {
+                case 'fileLink': 
+                    return p.file.link;
+                case 'progress': 
+                    return `60%<progress style="max-width: 65px" value="6" max="10"></progress>`;
+                case 'archiveButton': 
+                    return Utils.createArchiveButton(dv, p);
+                case 'startDate': 
+                    return p.startDate || "-";
+                case 'endDate': 
+                    return p.endDate || "-";
+                case 'deadlineDate': 
+                    return p.deadlineDate || "-";
+                default:
+                    // Si no es ninguno de los anteriores, asumimos que es un campo de Metadata Menu (status, priority, size, etc.)
+                    return f(dv, p, field);
+            }
+        });
+    }
+
     showActiveProjectsByArea(dv, area, projectFolder, Utils) {
         const {fieldModifier: f} = app.plugins.plugins['metadata-menu'].api;
+        const config = customJS.FileClassMapper;
+        const statusMap = config.STATUS_MAP;
+        const tableConfig = config.TABLES_CONFIG.activeProjects;
+
         const projects = dv.pages(`"${projectFolder}"`)
-            .where(p =>
-                p.fileClass === "project" &&
-                p.area &&
-                p.area.path === area.file.path &&
-                p.status !== "🟢 Done" && p.status !== "⛔ Canceled" && p.archived !== true 
+            .where(p => p.fileClass === "project" && p.area && p.area.path === area.file.path &&
+                p.status !== statusMap.done && p.status !== statusMap.canceled && p.archived !== true 
             );
 
         if (projects.length > 0) {
             dv.header(3, `⏳ Active Projects`);
-            dv.table(["📁Projects", "🎯Deadline", "📍Status", "⬆️Priority", "📊Progress", "🗃"],
-                projects.map(p => [
-                    p.file.link,
-                    //f(dv, p, "startDate"),
-                    //f(dv, p, "deadlineDate"),
-                    //p.startDate || "-",
-                    p.deadlineDate || "-",
-                    f(dv, p, "status"),
-                    f(dv, p, "priority"),
-                    //f(dv, p, "archived")
-                    `60%<progress style="max-width: 65px" value="6" max="10"></progress>`,
-                    Utils.createArchiveButton(dv, p)
-                ])
-            );
+            dv.table(tableConfig.headers, projects.map(p => this._buildRow(dv, p, tableConfig.fields, Utils, f)));
         }
     }
 
     showDoneProjectsByArea(dv, area, projectFolder, archivedProjectFolder, Utils) {
         const {fieldModifier: f} = app.plugins.plugins['metadata-menu'].api;
+        const config = customJS.FileClassMapper;
+        const statusMap = config.STATUS_MAP;
+        const tableConfig = config.TABLES_CONFIG.doneProjects;
+
         const projects = dv.pages(`"${projectFolder}" or "${archivedProjectFolder}"`)
-            .where(p =>
-                p.fileClass === "project" &&
-                p.area &&
-                p.area.path === area.file.path &&
-                p.status === "🟢 Done"
-            );
+            .where(p => p.fileClass === "project" && p.area && p.area.path === area.file.path && p.status === statusMap.done);
 
         if (projects.length > 0) {
             dv.header(3, `✅ Completed Projects`);
-            dv.table(["📁Projects", "🗓Start",  "🗓End", "🎯Deadline", "⬆️Priority", "🗃"],
-                projects.map(p => [
-                    p.file.link,
-                    p.startDate || "-",
-                    p.endDate || "-",
-                    p.deadlineDate || "-",
-                    p.priority || "-",
-                    Utils.createArchiveButton(dv, p)
-                ])
-            );
+            dv.table(tableConfig.headers, projects.map(p => this._buildRow(dv, p, tableConfig.fields, Utils, f)));
         }
     }
 
     showActiveTasksByArea(dv, area, taskFolder, Utils) {
         const {fieldModifier: f} = app.plugins.plugins['metadata-menu'].api;
+        const config = customJS.FileClassMapper;
+        const statusMap = config.STATUS_MAP;
+        const tableConfig = config.TABLES_CONFIG.activeTasks;
+
         const tasks = dv.pages(`"${taskFolder}"`)
-            .where(p =>
-                p.fileClass === "task" &&
-                p.area &&
-                p.area.path === area.file.path &&
-                p.status !== "🟢 Done" && p.status !== "⛔ Canceled" && p.archived !== true 
+            .where(p => p.fileClass === "task" && p.area && p.area.path === area.file.path &&
+                p.status !== statusMap.done && p.status !== statusMap.canceled && p.archived !== true 
             );
 
-        if (tasks .length > 0) {
+        if (tasks.length > 0) {
             dv.header(3, `⏳ Active Tasks`);
-            dv.table(["📝Tasks", "🎯Deadline", "📍Status", "📐Size", "⬆️Priority", "📊Progress", "🗃"],
-                tasks.map(p => [
-                    p.file.link,
-                    //f(dv, p, "startDate"),
-                    //f(dv, p, "deadlineDate"),
-                    //p.startDate || "-",
-                    p.deadlineDate || "-",
-                    f(dv, p, "status"),
-                    f(dv, p, "size"),
-                    f(dv, p, "priority"),
-                    //f(dv, p, "archived")
-                    `60%<progress style="max-width: 65px" value="6" max="10"></progress>`,
-                    Utils.createArchiveButton(dv, p)
-                ])
-            );
+            dv.table(tableConfig.headers, tasks.map(p => this._buildRow(dv, p, tableConfig.fields, Utils, f)));
         }
     }
 
     showDoneTasksByArea(dv, area, taskFolder, archivedTaskFolder, Utils) {
         const {fieldModifier: f} = app.plugins.plugins['metadata-menu'].api;
-        const tasks = dv.pages(`"${taskFolder}" or "${archivedTaskFolder}"`)
-            .where(p =>
-                p.fileClass === "task" &&
-                p.area &&
-                p.area.path === area.file.path &&
-                p.status === "🟢 Done"
-            );
+        const config = customJS.FileClassMapper;
+        const statusMap = config.STATUS_MAP;
+        const tableConfig = config.TABLES_CONFIG.doneTasks;
 
-        if (tasks .length > 0) {
+        const tasks = dv.pages(`"${taskFolder}" or "${archivedTaskFolder}"`)
+            .where(p => p.fileClass === "task" && p.area && p.area.path === area.file.path && p.status === statusMap.done);
+
+        if (tasks.length > 0) {
             dv.header(3, `✅ Completed Task`);
-            dv.table(["📝Tasks", "🗓Start",  "🗓End", "🎯Deadline", "📐Size", "⬆️Priority", "🗃"],
-                tasks.map(p => [
-                    p.file.link,
-                    //f(dv, p, "startDate"),
-                    //f(dv, p, "deadlineDate"),
-                    p.startDate || "-",
-                    p.endDate || "-",
-                    p.deadlineDate || "-",
-                    p.size || "-",
-                    p.priority || "-",
-                    //f(dv, p, "archived")
-                    Utils.createArchiveButton(dv, p)
-                ])
-            );
+            dv.table(tableConfig.headers, tasks.map(p => this._buildRow(dv, p, tableConfig.fields, Utils, f)));
         }
     }
 }
