@@ -2,23 +2,19 @@
  * sync_project_hierarchy.js
  *
  * Orquestador de sincronización de proyectos.
- * Responsabilidades:
- *   1. Sincronizar tareas (delegando a "Sync Task Hierarchy").
- *   2. Leer proyectos y tareas del vault.
- *   3. Delegar la evaluación a ProjectEvaluator.
- *   4. Persistir los cambios al vault.
- *
- * La lógica de negocio vive en: _scripts/user/project_evaluator.js
  */
 module.exports = async (params) => {
     const { app } = params;
+
+    // ── 0. BOOTSTRAP ──────────────────────────────────────────────────────
+    customJS.SystemBootstrap.boot();
 
     if (!customJS?.FileClassMapper || !customJS?.Utils) {
         new Notice("❌ Error: customJS o sus módulos no están cargados.");
         return;
     }
 
-    const { Utils } = customJS;
+    const { Utils, ProjectEvaluator } = customJS;
     const quickAddApi = app.plugins.plugins.quickadd.api;
 
     // ── 1. SINCRONIZAR TAREAS PRIMERO ─────────────────────────────────────
@@ -34,21 +30,17 @@ module.exports = async (params) => {
     }
 
     // ── 2. CONSTRUIR MAPA DE PROYECTOS Y TAREAS ───────────────────────────
-
     const projects = _buildProjectsMap(app, Utils);
     _mapTasksToProjects(app, projects, Utils);
 
     // ── 3. EVALUAR ────────────────────────────────────────────────────────
-
-    const { ProjectEvaluator } = customJS;
     ProjectEvaluator.evaluate(projects);
 
     // ── 4. PERSISTIR CAMBIOS ──────────────────────────────────────────────
-
-    const { updatedCount, archivedCount, priorityScaledCount } = await _applyChanges(app, quickAddApi, projects);
+    const { updatedCount, archivedCount, priorityScaledCount } =
+        await _applyChanges(app, quickAddApi, projects);
 
     // ── FEEDBACK ──────────────────────────────────────────────────────────
-
     if (updatedCount > 0) {
         new Notice(`✅ ${updatedCount} proyectos sincronizados. (${archivedCount} archivados).`);
         new Notice(`🔥 ${priorityScaledCount} proyectos escalaron su prioridad.`);
@@ -61,10 +53,6 @@ module.exports = async (params) => {
 // CONSTRUCCIÓN DEL MAPA
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Lee todos los archivos con fileClass "project" y construye un mapa de nodos.
- * @returns {Object} projects - Mapa { basename: ProjectNode }
- */
 function _buildProjectsMap(app, Utils) {
     const projects = {};
 
@@ -81,8 +69,7 @@ function _buildProjectsMap(app, Utils) {
             deadlineDate : fm.deadlineDate,
             endDate      : fm.endDate,
             archived     : fm.archived === true,
-            tasks        : [],      // Se rellena en _mapTasksToProjects
-            // Campos de resultado
+            tasks        : [],
             newStatus    : null,
             newPriority  : null,
             newEndDate   : undefined,
@@ -93,10 +80,6 @@ function _buildProjectsMap(app, Utils) {
     return projects;
 }
 
-/**
- * Lee todas las tareas del vault y añade sus estados al proyecto correspondiente.
- * Usa el metadataCache actualizado (tras haber ejecutado Sync Task Hierarchy).
- */
 function _mapTasksToProjects(app, projects, Utils) {
     for (const file of Utils.getFilesByClass(app, 'task')) {
         const fm = Utils.getFrontmatter(app, file);
@@ -115,15 +98,15 @@ function _mapTasksToProjects(app, projects, Utils) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function _applyChanges(app, quickAddApi, projects) {
-    let updatedCount = 0;
-    let archivedCount = 0;
-    let priorityScaledCount = 0; // <-- NUEVO
+    let updatedCount       = 0;
+    let archivedCount      = 0;
+    let priorityScaledCount = 0;
 
     for (const proj of Object.values(projects)) {
         const statusChanged   = proj.newStatus   !== null      && proj.newStatus   !== proj.status;
         const endDateChanged  = proj.newEndDate  !== undefined && proj.newEndDate  !== proj.endDate;
         const archivedChanged = proj.newArchived !== null      && proj.newArchived !== proj.archived;
-        const priorityChanged = proj.newPriority !== null      && proj.newPriority !== proj.priority; // <-- NUEVO
+        const priorityChanged = proj.newPriority !== null      && proj.newPriority !== proj.priority;
 
         if (!statusChanged && !endDateChanged && !archivedChanged && !priorityChanged) continue;
 
@@ -131,10 +114,7 @@ async function _applyChanges(app, quickAddApi, projects) {
             if (statusChanged)   fm.status   = proj.newStatus;
             if (endDateChanged)  fm.endDate  = proj.newEndDate ?? "";
             if (archivedChanged) fm.archived = proj.newArchived;
-            if (priorityChanged) { // <-- NUEVO
-                fm.priority = proj.newPriority;
-                priorityScaledCount++;
-            }
+            if (priorityChanged) { fm.priority = proj.newPriority; priorityScaledCount++; }
         });
         updatedCount++;
 
