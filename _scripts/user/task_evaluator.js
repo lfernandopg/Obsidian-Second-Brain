@@ -2,8 +2,8 @@
 // 📐 CLASE AUXILIAR: MOTOR DE TAMAÑO (Estimación Bottom-Up)
 // =========================================================================
 class SizeMotor {
-    constructor(sizeMap) {
-        this.sMap = sizeMap;
+    constructor(taskSizeMap) {
+        this.sMap = taskSizeMap;
         
         // 1. Asignamos un peso de esfuerzo usando Fibonacci
         this.weightMap = {
@@ -64,8 +64,8 @@ class SizeMotor {
 // ⚙️ CLASE AUXILIAR: MOTOR DE RECURRENCIA Y ANTICIPACIÓN
 // =========================================================================
 class RecurrenceMotor {
-    constructor(sizeMap) {
-        this.sMap = sizeMap;
+    constructor(taskSizeMap) {
+        this.sMap = taskSizeMap;
     }
 
     // Clasifica las tareas en 3 grupos de peso (1: Ligero, 2: Medio, 3: Pesado)
@@ -150,9 +150,9 @@ class RecurrenceMotor {
 // ⚙️ CLASE AUXILIAR: MOTOR DE URGENCIA
 // =========================================================================
 class UrgencyMotor {
-    constructor(priorityMap, sizeMap) {
+    constructor(priorityMap, taskSizeMap) {
         this.pMap = priorityMap;
-        this.sMap = sizeMap;
+        this.sMap = taskSizeMap;
     }
 
     getPriorityWeight(priority) {

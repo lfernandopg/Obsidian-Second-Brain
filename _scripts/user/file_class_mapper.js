@@ -141,7 +141,7 @@ class FileClassMapper {
 
         this.STATUS_MAP   = fm.statusMap   ?? {};
         this.PRIORITY_MAP = fm.priorityMap ?? {};
-        this.SIZE_MAP     = fm.sizeMap     ?? {};
+        this.SIZE_MAP     = fm.taskSizeMap     ?? {};
         this.ALL_VALUES   = fm;
     }
 

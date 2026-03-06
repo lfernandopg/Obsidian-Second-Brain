@@ -112,7 +112,7 @@ fields:
     type: Select
     options:
       sourceType: ValuesFromDVQuery
-      valuesFromDVQuery: Object.values(dv.page("_config/values").sizeMap)
+      valuesFromDVQuery: Object.values(dv.page("_config/values").taskSizeMap)
     path: ""
     id: aFd3Xx
   - name: parentTask

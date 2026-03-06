@@ -2,6 +2,7 @@
 fileClass: project
 status:
 priority:
+size:
 startDate:
 deadlineDate:
 endDate:

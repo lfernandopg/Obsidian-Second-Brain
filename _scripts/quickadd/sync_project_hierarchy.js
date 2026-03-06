@@ -46,12 +46,13 @@ module.exports = async (params) => {
 
     // ── 4. PERSISTIR CAMBIOS ──────────────────────────────────────────────
 
-    const { updatedCount, archivedCount } = await _applyChanges(app, quickAddApi, projects);
+    const { updatedCount, archivedCount, priorityScaledCount } = await _applyChanges(app, quickAddApi, projects);
 
     // ── FEEDBACK ──────────────────────────────────────────────────────────
 
     if (updatedCount > 0) {
         new Notice(`✅ ${updatedCount} proyectos sincronizados. (${archivedCount} archivados).`);
+        new Notice(`🔥 ${priorityScaledCount} proyectos escalaron su prioridad.`);
     } else {
         new Notice(`👍 Los proyectos están perfectamente sincronizados.`);
     }
@@ -75,6 +76,8 @@ function _buildProjectsMap(app, Utils) {
         projects[file.basename] = {
             file,
             status       : fm.status,
+            priority     : fm.priority,
+            size         : fm.size,
             startDate    : fm.startDate,
             deadlineDate : fm.deadlineDate,
             endDate      : fm.endDate,
@@ -82,6 +85,7 @@ function _buildProjectsMap(app, Utils) {
             tasks        : [],      // Se rellena en _mapTasksToProjects
             // Campos de resultado
             newStatus    : null,
+            newPriority  : null,
             newEndDate   : undefined,
             newArchived  : null,
         };
@@ -114,18 +118,24 @@ function _mapTasksToProjects(app, projects, Utils) {
 async function _applyChanges(app, quickAddApi, projects) {
     let updatedCount = 0;
     let archivedCount = 0;
+    let priorityScaledCount = 0; // <-- NUEVO
 
     for (const proj of Object.values(projects)) {
         const statusChanged   = proj.newStatus   !== null      && proj.newStatus   !== proj.status;
         const endDateChanged  = proj.newEndDate  !== undefined && proj.newEndDate  !== proj.endDate;
         const archivedChanged = proj.newArchived !== null      && proj.newArchived !== proj.archived;
+        const priorityChanged = proj.newPriority !== null      && proj.newPriority !== proj.priority; // <-- NUEVO
 
-        if (!statusChanged && !endDateChanged && !archivedChanged) continue;
+        if (!statusChanged && !endDateChanged && !archivedChanged && !priorityChanged) continue;
 
         await app.fileManager.processFrontMatter(proj.file, (fm) => {
             if (statusChanged)   fm.status   = proj.newStatus;
             if (endDateChanged)  fm.endDate  = proj.newEndDate ?? "";
             if (archivedChanged) fm.archived = proj.newArchived;
+            if (priorityChanged) { // <-- NUEVO
+                fm.priority = proj.newPriority;
+                priorityScaledCount++;
+            }
         });
         updatedCount++;
 
@@ -135,5 +145,5 @@ async function _applyChanges(app, quickAddApi, projects) {
         }
     }
 
-    return { updatedCount, archivedCount };
+    return { updatedCount, archivedCount, priorityScaledCount };
 }
