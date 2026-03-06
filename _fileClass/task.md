@@ -168,4 +168,16 @@ fields:
       valuesFromDVQuery: Object.values(dv.page("_config/values").statusMap)
     path: ""
     id: PPd9ek
+  - name: recurrence
+    type: Select
+    options:
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").recurrenceMap)
+    path: ""
+    id: R3curr
+  - name: nextRecurrenceCreated
+    type: Boolean
+    options: {}
+    path: ""
+    id: N3xtRc
 ---

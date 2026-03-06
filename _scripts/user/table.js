@@ -1,107 +1,147 @@
 class Table {
 
-    // Función "traductora" dinámica para construir filas según el YAML
+    // ─────────────────────────────────────────────
+    // CORE – CONSTRUCCIÓN DE FILAS
+    // ─────────────────────────────────────────────
+
+    /**
+     * Construye una fila de tabla mapeando los nombres de campo a sus valores.
+     * Los campos especiales (fileLink, progress, archiveButton, fechas) tienen
+     * su propio caso; el resto se delega a Metadata Menu fieldModifier.
+     *
+     * @param {DataviewAPI} dv
+     * @param {DataviewPage} p
+     * @param {string[]} fields  - Lista de nombres de campo de la config YAML
+     * @param {Utils} Utils
+     * @param {Function} f       - fieldModifier de Metadata Menu
+     * @returns {any[]}
+     */
     _buildRow(dv, p, fields, Utils, f) {
         return fields.map(field => {
-            switch(field) {
-                case 'fileLink': 
-                    return p.file.link;
-                case 'progress': 
-                    return `60%<progress style="max-width: 65px" value="6" max="10"></progress>`;
-                case 'archiveButton': 
-                    return Utils.createArchiveButton(dv, p);
-                case 'startDate': 
-                    return p.startDate || "-";
-                case 'endDate': 
-                    return p.endDate || "-";
-                case 'deadlineDate': 
-                    return p.deadlineDate || "-";
-                default:
-                    // Si no es ninguno de los anteriores, asumimos que es un campo de Metadata Menu (status, priority, size, etc.)
-                    return f(dv, p, field);
+            switch (field) {
+                case 'fileLink':      return p.file.link;
+                case 'archiveButton': return Utils.createArchiveButton(dv, p);
+                case 'progress':      return this._progressBar(p);
+                case 'startDate':     return p.startDate    || "-";
+                case 'endDate':       return p.endDate      || "-";
+                case 'deadlineDate':  return p.deadlineDate || "-";
+                default:              return f(dv, p, field);
             }
         });
     }
 
+    /** Genera un fragmento HTML de barra de progreso. */
+    _progressBar(p) {
+        // TODO: calcular el progreso real desde las tareas hijas
+        return `60%<progress style="max-width: 65px" value="6" max="10"></progress>`;
+    }
+
+    // ─────────────────────────────────────────────
+    // HELPER INTERNO – RENDERIZADO GENÉRICO
+    // ─────────────────────────────────────────────
+
+    /**
+     * Renderiza una tabla Dataview a partir de un conjunto de páginas filtradas.
+     * Si no hay resultados, no dibuja nada (sin encabezados vacíos).
+     *
+     * @param {DataviewAPI} dv
+     * @param {DataviewPage[]} pages
+     * @param {string} header        - Texto del encabezado (e.g. "⏳ Active Projects")
+     * @param {Object} tableConfig   - { headers, fields } del YAML de tables.md
+     * @param {Utils} Utils
+     * @param {Function} f           - fieldModifier de Metadata Menu
+     */
+    _renderTable(dv, pages, header, tableConfig, Utils, f) {
+        if (!pages || pages.length === 0) return;
+        dv.header(3, header);
+        dv.table(
+            tableConfig.headers,
+            pages.map(p => this._buildRow(dv, p, tableConfig.fields, Utils, f))
+        );
+    }
+
+    // ─────────────────────────────────────────────
+    // API PÚBLICA – VISTAS POR ÁREA
+    // ─────────────────────────────────────────────
+
     showActiveProjectsByArea(dv, area, projectFolder, Utils) {
-        const {fieldModifier: f} = app.plugins.plugins['metadata-menu'].api;
-        const config = customJS.FileClassMapper;
-        const statusMap = config.STATUS_MAP;
-        const tableConfig = config.TABLES_CONFIG.activeProjects;
-
-        const projects = dv.pages(`"${projectFolder}"`)
-            .where(p => p.fileClass === "project" && p.area && p.area.path === area.file.path &&
-                p.status !== statusMap.done && p.status !== statusMap.canceled && p.archived !== true 
+        const { f, config, s } = this._getContext();
+        const pages = dv.pages(`"${projectFolder}"`)
+            .where(p =>
+                p.fileClass === "project" &&
+                p.area?.path === area.file.path &&
+                p.status !== s.done &&
+                p.status !== s.canceled &&
+                p.archived !== true
             );
-
-        if (projects.length > 0) {
-            dv.header(3, `⏳ Active Projects`);
-            dv.table(tableConfig.headers, projects.map(p => this._buildRow(dv, p, tableConfig.fields, Utils, f)));
-        }
+        this._renderTable(dv, pages, "⏳ Active Projects", config.activeProjects, Utils, f);
     }
 
     showDoneProjectsByArea(dv, area, projectFolder, archivedProjectFolder, Utils) {
-        const {fieldModifier: f} = app.plugins.plugins['metadata-menu'].api;
-        const config = customJS.FileClassMapper;
-        const statusMap = config.STATUS_MAP;
-        const tableConfig = config.TABLES_CONFIG.doneProjects;
-
-        const projects = dv.pages(`"${projectFolder}" or "${archivedProjectFolder}"`)
-            .where(p => p.fileClass === "project" && p.area && p.area.path === area.file.path && p.status === statusMap.done);
-
-        if (projects.length > 0) {
-            dv.header(3, `✅ Completed Projects`);
-            dv.table(tableConfig.headers, projects.map(p => this._buildRow(dv, p, tableConfig.fields, Utils, f)));
-        }
+        const { f, config, s } = this._getContext();
+        const pages = dv.pages(`"${projectFolder}" or "${archivedProjectFolder}"`)
+            .where(p =>
+                p.fileClass === "project" &&
+                p.area?.path === area.file.path &&
+                p.status === s.done
+            );
+        this._renderTable(dv, pages, "✅ Completed Projects", config.doneProjects, Utils, f);
     }
 
     showActiveTasksByArea(dv, area, taskFolder, Utils) {
-        const {fieldModifier: f} = app.plugins.plugins['metadata-menu'].api;
-        const config = customJS.FileClassMapper;
-        const statusMap = config.STATUS_MAP;
-        const tableConfig = config.TABLES_CONFIG.activeTasks;
-
-        const tasks = dv.pages(`"${taskFolder}"`)
-            .where(p => p.fileClass === "task" && p.area && p.area.path === area.file.path &&
-                p.status !== statusMap.done && p.status !== statusMap.canceled && p.archived !== true 
+        const { f, config, s } = this._getContext();
+        const pages = dv.pages(`"${taskFolder}"`)
+            .where(p =>
+                p.fileClass === "task" &&
+                p.area?.path === area.file.path &&
+                p.status !== s.done &&
+                p.status !== s.canceled &&
+                p.archived !== true
             );
-
-        if (tasks.length > 0) {
-            dv.header(3, `⏳ Active Tasks`);
-            dv.table(tableConfig.headers, tasks.map(p => this._buildRow(dv, p, tableConfig.fields, Utils, f)));
-        }
+        this._renderTable(dv, pages, "⏳ Active Tasks", config.activeTasks, Utils, f);
     }
 
     showDoneTasksByArea(dv, area, taskFolder, archivedTaskFolder, Utils) {
-        const {fieldModifier: f} = app.plugins.plugins['metadata-menu'].api;
-        const config = customJS.FileClassMapper;
-        const statusMap = config.STATUS_MAP;
-        const tableConfig = config.TABLES_CONFIG.doneTasks;
-
-        const tasks = dv.pages(`"${taskFolder}" or "${archivedTaskFolder}"`)
-            .where(p => p.fileClass === "task" && p.area && p.area.path === area.file.path && p.status === statusMap.done);
-
-        if (tasks.length > 0) {
-            dv.header(3, `✅ Completed Task`);
-            dv.table(tableConfig.headers, tasks.map(p => this._buildRow(dv, p, tableConfig.fields, Utils, f)));
-        }
+        const { f, config, s } = this._getContext();
+        const pages = dv.pages(`"${taskFolder}" or "${archivedTaskFolder}"`)
+            .where(p =>
+                p.fileClass === "task" &&
+                p.area?.path === area.file.path &&
+                p.status === s.done
+            );
+        this._renderTable(dv, pages, "✅ Completed Tasks", config.doneTasks, Utils, f);
     }
 
+    /**
+     * BUG FIX: el fileClass "resource" usa la propiedad `areas` (MultiFile, array),
+     * no `area` (File, singular). La comparación anterior con `p.area.path` nunca
+     * coincidía y la sección de recursos nunca mostraba resultados.
+     *
+     * Ahora se itera sobre el array `areas` para buscar el path del área activa.
+     */
     showResourcesByArea(dv, area, resourceFolder, Utils) {
-        const {fieldModifier: f} = app.plugins.plugins['metadata-menu'].api;
-        const config = customJS.FileClassMapper;
-        const tableConfig = config.TABLES_CONFIG.areaResources;
+        const { f, config } = this._getContext();
+        const pages = dv.pages(`"${resourceFolder}"`)
+            .where(p => {
+                if (p.fileClass !== "resource") return false;
+                if (!p.areas) return false;
+                // `areas` puede ser un único link o un array de links
+                const areasArr = Array.isArray(p.areas) ? p.areas : [p.areas];
+                return areasArr.some(a => a?.path === area.file.path);
+            });
+        this._renderTable(dv, pages, "📚 Resources", config.areaResources, Utils, f);
+    }
 
-        //areaResources:
-        //headers: ["📚 Resource", "🏷️ Type", "📍 Status", "👤 Author", "🗃"]
-        //fields: ["fileLink", "type", "referenceStatus", "author", "archiveButton"]
+    // ─────────────────────────────────────────────
+    // HELPER PRIVADO
+    // ─────────────────────────────────────────────
 
-        const resources = dv.pages(`"${resourceFolder}"`)
-            .where(p => p.fileClass === "resource" && p.area && p.area.path === area.file.path);
-        
-        if (resources.length > 0) {
-            dv.header(3, `📚 Resources`);
-            dv.table(tableConfig.headers, resources.map(p => this._buildRow(dv, p, tableConfig.fields, Utils, f)));
-        }
-    }    
+    /** Obtiene los objetos comunes necesarios para renderizar tablas. */
+    _getContext() {
+        return {
+            f      : app.plugins.plugins['metadata-menu'].api.fieldModifier,
+            config : customJS.FileClassMapper.TABLES_CONFIG,
+            s      : customJS.FileClassMapper.STATUS_MAP,
+        };
+    }
 }

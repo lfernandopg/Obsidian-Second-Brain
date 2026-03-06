@@ -20,6 +20,11 @@ priorityMap:
     medium: 🔵 Medium
     high: 🟡 High
     critical: 🔴 Critical
+recurrenceMap:
+    daily: 🔁 Diario
+    weekly: 📅 Semanal
+    monthly: 🗓️ Mensual
+    yearly: 🎂 Anual
 sizeMap:
     very_small: 📌 Very Small
     small: 📝 Small
