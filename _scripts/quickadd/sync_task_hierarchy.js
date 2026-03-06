@@ -2,18 +2,26 @@ module.exports = async (params) => {
     const { app, quickAddApi } = params;
     const { Utils, TaskEvaluator, FileClassMapper } = customJS;
 
-    // ── 1. CONSTRUIR GRAFO ────────────────────────────────────────────────
+    // ── 1. MAPEAR PRIORIDADES DE PROYECTOS (TOP-DOWN) ─────────────────────
+    const allProjects = Utils.getFilesByClass(app, 'project');
+    const projectPriorities = {};
+    for (const p of allProjects) {
+        const pFm = Utils.getFrontmatter(app, p);
+        if (pFm && pFm.priority) projectPriorities[p.basename] = pFm.priority;
+    }
+
+    // ── 2. CONSTRUIR GRAFO ────────────────────────────────────────────────
     const allTasks = Utils.getFilesByClass(app, 'task');
     const graph = _buildGraph(app, allTasks, Utils);
 
-    // ── 2. EVALUAR ESTADOS Y PRIORIDADES ──────────────────────────────────
+    // ── 3. EVALUAR ESTADOS Y PRIORIDADES ──────────────────────────────────
     const evaluator = new TaskEvaluator();
-    evaluator.evaluate(graph);
+    evaluator.evaluate(graph, projectPriorities); // <-- AHORA PASAMOS EL MAPA
 
-    // ── 3. PERSISTIR CAMBIOS ──────────────────────────────────────────────
+    // ── 4. PERSISTIR CAMBIOS ──────────────────────────────────────────────
     const { updatedCount, archivedCount, priorityScaledCount, sizeScaledCount } = await _applyChanges(app, quickAddApi, graph);
 
-    // ── 4. PROCESAR RECURRENCIAS (EL NUEVO MOTOR) ─────────────────────────
+    // ── 5. PROCESAR RECURRENCIAS (EL NUEVO MOTOR) ─────────────────────────
     const recurrencesCreated = await _processRecurrences(app, graph, FileClassMapper.STATUS_MAP);
 
     // ── FEEDBACK CONSOLIDADO ──────────────────────────────────────────────
@@ -22,8 +30,8 @@ module.exports = async (params) => {
         if (updatedCount > 0) msg += `\n🔄 ${updatedCount} tareas actualizadas.`;
         if (archivedCount > 0) msg += `\n📦 ${archivedCount} tareas archivadas.`;
         if (priorityScaledCount > 0) msg += `\n🔥 ${priorityScaledCount} tareas escalaron su prioridad.`;
-        if (recurrencesCreated > 0) msg += `\n♻️ ${recurrencesCreated} tareas recurrentes creadas para el próximo ciclo.`;
-        if (sizeScaledCount > 0) msg += `\n📐 ${sizeScaledCount} tareas escalaron su tamaño base a sus subtareas.`;
+        if (recurrencesCreated > 0) msg += `\n♻️ ${recurrencesCreated} tareas recurrentes creadas.`;
+        if (sizeScaledCount > 0) msg += `\n📐 ${sizeScaledCount} tareas recalcularon su tamaño.`;
         new Notice(msg);
     } else {
         new Notice(`👍 Todo el sistema está perfectamente sincronizado y al día.`);
@@ -53,6 +61,7 @@ function _buildGraph(app, allTasks, Utils) {
             archived     : fm.archived === true,
             parentTasks  : Utils.getLinks(fm.parentTask),
             nextTasks    : Utils.getLinks(fm.nextTask),
+            projects     : Utils.getLinks(fm.project),
             children     : [],
             previousTasks: [],
             newStatus    : null,

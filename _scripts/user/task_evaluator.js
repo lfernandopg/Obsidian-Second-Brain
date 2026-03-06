@@ -221,7 +221,7 @@ class TaskEvaluator {
         this.sizeMotor = new SizeMotor(customJS.FileClassMapper.SIZE_MAP);
     }
 
-    evaluate(graph) {
+    evaluate(graph, projectPriorities = {}) {
         let anyChanges = false;
         let loopCount = 0;
         const MAX_LOOPS = 10;
@@ -302,7 +302,8 @@ class TaskEvaluator {
                 }
 
                 // --- REGLA D: Cierre de Tareas Hoja ---
-                if (node.children.length === 0 && evaluatedStatus !== this.statusMap.canceled) {
+                const isLeafFinal = node.children.length === 0; // Calculamos de nuevo por seguridad
+                if (isLeafFinal && evaluatedStatus !== this.statusMap.canceled) {
                     if (evaluatedEndDate && evaluatedStatus !== this.statusMap.done) {
                         evaluatedStatus = this.statusMap.done;
                     }
@@ -322,8 +323,52 @@ class TaskEvaluator {
                     }
                 }
 
-                // --- REGLA F: ESCALADO DE TAMAÑO (Bottom-Up) ---
-                if (!isLeaf && evaluatedStatus !== this.statusMap.canceled) {
+                // --- REGLA F: HERENCIA DE PRIORIDAD (Top-Down) ---
+                if (evaluatedStatus !== this.statusMap.done && evaluatedStatus !== this.statusMap.canceled) {
+                    const currentPriority = node.newPriority !== null ? node.newPriority : node.priority;
+                    let highestTargetPriority = currentPriority;
+                    let highestWeight = this.urgencyMotor.getPriorityWeight(currentPriority);
+
+                    // 1. Herencia del Proyecto Padre (Si el proyecto quema, la tarea quema)
+                    if (node.projects && node.projects.length > 0) {
+                        for (const pName of node.projects) {
+                            const pPriority = projectPriorities[pName];
+                            if (pPriority) {
+                                const pWeight = this.urgencyMotor.getPriorityWeight(pPriority);
+                                if (pWeight > highestWeight) {
+                                    highestWeight = pWeight;
+                                    highestTargetPriority = pPriority;
+                                }
+                            }
+                        }
+                    }
+
+                    // 2. Herencia de la Tarea Padre (Recursividad Top-Down para Subtareas)
+                    if (node.parentTasks.length > 0) {
+                        for (const parentName of node.parentTasks) {
+                            const parentNode = graph[parentName];
+                            if (parentNode) {
+                                // Usamos la nueva prioridad del padre por si fue actualizada en este mismo bucle
+                                const parentPriority = parentNode.newPriority !== null ? parentNode.newPriority : parentNode.priority;
+                                const parentWeight = this.urgencyMotor.getPriorityWeight(parentPriority);
+                                if (parentWeight > highestWeight) {
+                                    highestWeight = parentWeight;
+                                    highestTargetPriority = parentPriority;
+                                }
+                            }
+                        }
+                    }
+
+                    if (highestTargetPriority !== currentPriority) {
+                        node.newPriority = highestTargetPriority;
+                        // Forzamos otra vuelta del bucle para asegurar que los hijos (subtareas) 
+                        // hereden esta nueva prioridad en la siguiente iteración
+                        anyChanges = true; 
+                    }
+                }
+
+                // --- REGLA G: ESCALADO DE TAMAÑO (Bottom-Up) ---
+                if (!isLeafFinal && evaluatedStatus !== this.statusMap.canceled) {
                     const currentSize = node.newSize !== null ? node.newSize : node.size;
                     
                     // Obtenemos los tamaños de las subtareas (ignoramos las canceladas porque no requieren esfuerzo)

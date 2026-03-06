@@ -31,9 +31,18 @@ class Table {
     }
 
     /** Genera un fragmento HTML de barra de progreso. */
-    _progressBar(p) {
-        // TODO: calcular el progreso real desde las tareas hijas
-        return `60%<progress style="max-width: 65px" value="6" max="10"></progress>`;
+    _progressBar(p, dv, s) {
+        if (p.fileClass !== 'project') return "-";
+        
+        // Buscar todas las tareas que apuntan a este proyecto
+        const tasks = dv.pages().where(t => t.fileClass === 'task' && t.project?.path === p.file.path);
+        
+        if (tasks.length === 0) return `0% <progress style="max-width: 65px" value="0" max="100"></progress>`;
+        
+        const doneTasks = tasks.filter(t => t.status === s.done || t.status === s.canceled);
+        const percent = Math.round((doneTasks.length / tasks.length) * 100);
+        
+        return `${percent}% <progress style="max-width: 65px" value="${percent}" max="100"></progress>`;
     }
 
     // ─────────────────────────────────────────────
