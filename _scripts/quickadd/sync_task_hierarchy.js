@@ -7,7 +7,11 @@ module.exports = async (params) => {
     const { Utils, TaskEvaluator, FileClassMapper } = customJS;
 
     // ── 1. MAPEAR PRIORIDADES DE PROYECTOS (TOP-DOWN) ─────────────────────
-    const allProjects       = Utils.getFilesByClass(app, 'project');
+    // [FIX V-10] Caché compartido para evitar iterar el vault dos veces
+    // (una por 'project' y otra por 'task'). Con vaults grandes esto es relevante.
+    const fileCache = new Map();
+
+    const allProjects       = Utils.getFilesByClass(app, 'project', fileCache);
     const projectPriorities = {};
     for (const p of allProjects) {
         const pFm = Utils.getFrontmatter(app, p);
@@ -15,7 +19,7 @@ module.exports = async (params) => {
     }
 
     // ── 2. CONSTRUIR GRAFO ────────────────────────────────────────────────
-    const allTasks = Utils.getFilesByClass(app, 'task');
+    const allTasks = Utils.getFilesByClass(app, 'task', fileCache);
     const graph    = _buildGraph(app, allTasks, Utils);
 
     // ── 3. EVALUAR ESTADOS Y PRIORIDADES ──────────────────────────────────
@@ -26,22 +30,21 @@ module.exports = async (params) => {
         await _applyChanges(app, quickAddApi, graph);
 
     // ── 5. PROCESAR RECURRENCIAS ──────────────────────────────────────────
-    // Usamos el RecurrenceMotor ya inicializado dentro de TaskEvaluator
     const recurrencesCreated = await _processRecurrences(
         app,
         graph,
         FileClassMapper.STATUS_MAP,
-        TaskEvaluator.recurrenceMotor   // motor inyectado, sin new ni customJS
+        TaskEvaluator.recurrenceMotor
     );
 
     // ── FEEDBACK CONSOLIDADO ──────────────────────────────────────────────
     if (updatedCount > 0 || recurrencesCreated > 0) {
         let msg = `✅ Sincronización completa:`;
-        if (updatedCount > 0)         msg += `\n🔄 ${updatedCount} tareas actualizadas.`;
-        if (archivedCount > 0)        msg += `\n📦 ${archivedCount} tareas archivadas.`;
-        if (priorityScaledCount > 0)  msg += `\n🔥 ${priorityScaledCount} tareas escalaron su prioridad.`;
-        if (recurrencesCreated > 0)   msg += `\n♻️ ${recurrencesCreated} tareas recurrentes creadas.`;
-        if (sizeScaledCount > 0)      msg += `\n📐 ${sizeScaledCount} tareas recalcularon su tamaño.`;
+        if (updatedCount > 0)        msg += `\n🔄 ${updatedCount} tareas actualizadas.`;
+        if (archivedCount > 0)       msg += `\n📦 ${archivedCount} tareas archivadas.`;
+        if (priorityScaledCount > 0) msg += `\n🔥 ${priorityScaledCount} tareas escalaron su prioridad.`;
+        if (recurrencesCreated > 0)  msg += `\n♻️ ${recurrencesCreated} tareas recurrentes creadas.`;
+        if (sizeScaledCount > 0)     msg += `\n📐 ${sizeScaledCount} tareas recalcularon su tamaño.`;
         new Notice(msg);
     } else {
         new Notice(`👍 Todo el sistema está perfectamente sincronizado y al día.`);
@@ -49,37 +52,42 @@ module.exports = async (params) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FUNCIONES AUXILIARES
+// CONSTRUCCIÓN DEL GRAFO
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _buildGraph(app, allTasks, Utils) {
     const graph = {};
     for (const file of allTasks) {
-        const fm = Utils.getFrontmatter(app, file);
-        if (!fm) continue;
+        // [FIX V-9 / anterior] try-catch individual por archivo para no abortar el grafo entero
+        try {
+            const fm = Utils.getFrontmatter(app, file);
+            if (!fm) continue;
 
-        graph[file.basename] = {
-            file,
-            status               : fm.status,
-            priority             : fm.priority,
-            size                 : fm.size,
-            recurrence           : fm.recurrence,
-            nextRecurrenceCreated: fm.nextRecurrenceCreated === true,
-            startDate            : fm.startDate,
-            deadlineDate         : fm.deadlineDate,
-            endDate              : fm.endDate,
-            archived             : fm.archived === true,
-            parentTasks          : Utils.getLinks(fm.parentTask),
-            nextTasks            : Utils.getLinks(fm.nextTask),
-            projects             : Utils.getLinks(fm.project),
-            children             : [],
-            previousTasks        : [],
-            newStatus            : null,
-            newPriority          : null,
-            newSize              : null,
-            newEndDate           : undefined,
-            newArchived          : null,
-        };
+            graph[file.basename] = {
+                file,
+                status               : fm.status,
+                priority             : fm.priority,
+                size                 : fm.size,
+                recurrence           : fm.recurrence,
+                nextRecurrenceCreated: fm.nextRecurrenceCreated === true,
+                startDate            : fm.startDate,
+                deadlineDate         : fm.deadlineDate,
+                endDate              : fm.endDate,
+                archived             : fm.archived === true,
+                parentTasks          : Utils.getLinks(fm.parentTask),
+                nextTasks            : Utils.getLinks(fm.nextTask),
+                projects             : Utils.getLinks(fm.project),
+                children             : [],
+                previousTasks        : [],
+                newStatus            : null,
+                newPriority          : null,
+                newSize              : null,
+                newEndDate           : undefined,
+                newArchived          : null,
+            };
+        } catch (err) {
+            console.error(`[_buildGraph] Error procesando "${file.basename}":`, err);
+        }
     }
 
     for (const node of Object.values(graph)) {
@@ -90,14 +98,77 @@ function _buildGraph(app, allTasks, Utils) {
             if (graph[nextName]) graph[nextName].previousTasks.push(node.file.basename);
         }
     }
+
+    // [FIX V-8] Detectar ciclos en el grafo ANTES de evaluar.
+    // Un ciclo (A → B → A) impediría que anyChanges se estabilice, agotando
+    // MAX_LOOPS. Detectarlo aquí permite advertir al usuario con contexto claro.
+    _detectCycles(graph);
+
     return graph;
 }
 
+/**
+ * [FIX V-8] Detección de ciclos mediante DFS con coloración (blanco/gris/negro).
+ * - BLANCO (0): nodo no visitado.
+ * - GRIS   (1): nodo en el stack de llamadas actual (back-edge = ciclo).
+ * - NEGRO  (2): nodo completamente procesado.
+ *
+ * Solo emite console.warn; no lanza excepción para no abortar la sincronización
+ * completa. El usuario puede corregir el ciclo y re-ejecutar.
+ *
+ * @param {Object} graph - Grafo de nodos de tareas
+ */
+function _detectCycles(graph) {
+    const WHITE = 0, GRAY = 1, BLACK = 2;
+    const color = {};
+    const cyclesFound = [];
+
+    for (const k of Object.keys(graph)) color[k] = WHITE;
+
+    function dfs(name, path) {
+        color[name] = GRAY;
+        path.push(name);
+
+        for (const childName of (graph[name]?.children ?? [])) {
+            if (color[childName] === GRAY) {
+                // Encontramos un back-edge: hay un ciclo
+                const cycleStart = path.indexOf(childName);
+                const cyclePath  = [...path.slice(cycleStart), childName].join(' → ');
+                cyclesFound.push(cyclePath);
+                // Continúa para detectar todos los ciclos, no solo el primero
+                continue;
+            }
+            if (color[childName] === WHITE) {
+                dfs(childName, path);
+            }
+        }
+
+        path.pop();
+        color[name] = BLACK;
+    }
+
+    for (const k of Object.keys(graph)) {
+        if (color[k] === WHITE) dfs(k, []);
+    }
+
+    if (cyclesFound.length > 0) {
+        console.warn(
+            `[TaskGraph] ⚠️ Se detectaron ${cyclesFound.length} ciclo(s) en el grafo de tareas. ` +
+            `Esto puede causar evaluaciones incompletas. Revisa los campos 'parentTask' de estas tareas:\n` +
+            cyclesFound.map((c, i) => `  ${i + 1}. ${c}`).join('\n')
+        );
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PERSISTENCIA
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function _applyChanges(app, quickAddApi, graph) {
-    let updatedCount      = 0;
-    let archivedCount     = 0;
+    let updatedCount       = 0;
+    let archivedCount      = 0;
     let priorityScaledCount = 0;
-    let sizeScaledCount   = 0;
+    let sizeScaledCount    = 0;
 
     for (const node of Object.values(graph)) {
         const statusChanged   = node.newStatus   !== null      && node.newStatus   !== node.status;
@@ -108,18 +179,23 @@ async function _applyChanges(app, quickAddApi, graph) {
 
         if (!statusChanged && !endDateChanged && !archivedChanged && !priorityChanged && !sizeChanged) continue;
 
-        await app.fileManager.processFrontMatter(node.file, (fm) => {
-            if (statusChanged)   fm.status   = node.newStatus;
-            if (endDateChanged)  fm.endDate  = node.newEndDate ?? "";
-            if (archivedChanged) fm.archived = node.newArchived;
-            if (priorityChanged) { fm.priority = node.newPriority; priorityScaledCount++; }
-            if (sizeChanged)     { fm.size     = node.newSize;     sizeScaledCount++;     }
-        });
-        updatedCount++;
+        // [FIX ADICIONAL] try-catch individual para que un fallo no aborte el resto del bucle
+        try {
+            await app.fileManager.processFrontMatter(node.file, (fm) => {
+                if (statusChanged)   fm.status   = node.newStatus;
+                if (endDateChanged)  fm.endDate  = node.newEndDate ?? "";
+                if (archivedChanged) fm.archived = node.newArchived;
+                if (priorityChanged) { fm.priority = node.newPriority; priorityScaledCount++; }
+                if (sizeChanged)     { fm.size     = node.newSize;     sizeScaledCount++;     }
+            });
+            updatedCount++;
 
-        if (archivedChanged && node.newArchived === true) {
-            await quickAddApi.executeChoice("Move By Archived", { value: node.file.path });
-            archivedCount++;
+            if (archivedChanged && node.newArchived === true) {
+                await quickAddApi.executeChoice("Move By Archived", { value: node.file.path });
+                archivedCount++;
+            }
+        } catch (err) {
+            console.error(`[_applyChanges] Error persistiendo cambios en "${node.file.basename}":`, err);
         }
     }
     return { updatedCount, archivedCount, priorityScaledCount, sizeScaledCount };
@@ -128,22 +204,34 @@ async function _applyChanges(app, quickAddApi, graph) {
 // ─────────────────────────────────────────────────────────────────────────────
 // MOTOR DE I/O: CLONACIÓN DE RECURRENCIAS
 // ─────────────────────────────────────────────────────────────────────────────
+
 async function _processRecurrences(app, graph, statusMap, motor) {
     let createdCount = 0;
     const today = window.moment();
+
+    // [FIX #3] RegEx estricta para quitar SOLO la fecha final YYYY-MM-DD
+    // Captura opcionalmente el separador " - " inmediatamente antes de la fecha.
+    // Ejemplo: "Proyecto X - Fase 1 - 2026-03-05"  →  "Proyecto X - Fase 1"
+    const DATE_SUFFIX_REGEX = /\s*-\s*\d{4}-\d{2}-\d{2}$/;
 
     for (const node of Object.values(graph)) {
         if (node.archived || !node.recurrence || node.nextRecurrenceCreated) continue;
 
         const currentStatus = node.newStatus !== null ? node.newStatus : node.status;
-        
-        if (motor.shouldSpawnNext(currentStatus, node.deadlineDate, node.recurrence, node.size, statusMap.done)) {
+
+        if (!motor.shouldSpawnNext(currentStatus, node.deadlineDate, node.recurrence, node.size, statusMap.done)) {
+            continue;
+        }
+
+        try {
             const { newDeadline, newStart } = motor.calculateNextDates(
                 node.deadlineDate, node.startDate, node.recurrence
             );
-            
-            const folderPath  = customJS.FileClassMapper.getFolder("task");
-            const baseName    = node.file.basename.split(" - ")[0];
+
+            const folderPath = customJS.FileClassMapper.getFolder("task");
+
+            // [FIX #3] Usar RegEx en lugar de split(" - ")[0]
+            const baseName    = node.file.basename.replace(DATE_SUFFIX_REGEX, "").trim();
             const newFileName = `${baseName} - ${window.moment(newDeadline, "MMM DD, YY - HH:mm").format("YYYY-MM-DD")}`;
             const newFilePath = `${folderPath}/${newFileName}.md`;
 
@@ -158,6 +246,7 @@ async function _processRecurrences(app, graph, statusMap, motor) {
                 newFm.deadlineDate         = newDeadline;
                 newFm.endDate              = "";
                 newFm.createdDate          = today.format("MMM DD, YY - HH:mm");
+                // [FIX ADICIONAL] La nueva tarea comienza sin marca de recurrencia creada
                 newFm.nextRecurrenceCreated = false;
             });
 
@@ -166,6 +255,8 @@ async function _processRecurrences(app, graph, statusMap, motor) {
             });
 
             createdCount++;
+        } catch (err) {
+            console.error(`[_processRecurrences] Error clonando recurrencia de "${node.file.basename}":`, err);
         }
     }
     return createdCount;

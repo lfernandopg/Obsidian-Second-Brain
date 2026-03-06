@@ -23,7 +23,7 @@ class ProjectUrgencyMotor {
 
     calculateTarget(daysLeft, sizeGroup) {
         if (daysLeft < 0) return this.pMap.critical;
-        
+
         if (sizeGroup === 1) {
             if (daysLeft <= 3)  return this.pMap.critical;
             if (daysLeft <= 7)  return this.pMap.high;
@@ -47,17 +47,30 @@ class ProjectUrgencyMotor {
 
     evaluate(currentPriority, size, deadline) {
         if (!deadline) return currentPriority;
-        
-        const today      = window.moment().startOf('day');
-        const targetDate = window.moment(deadline, ["MMM DD, YY - HH:mm", "MMM DD, YY", "YYYY-MM-DD"]).startOf('day');
-        const daysLeft   = targetDate.diff(today, 'days');
-        
+
+        // [FIX V-6] Modo estricto de parseo (tercer argumento `true`).
+        // Moment en modo permisivo acepta cadenas inválidas y produce fechas
+        // silenciosamente incorrectas. El modo estricto falla rápido y claro.
+        const FORMATS = ["MMM DD, YY - HH:mm", "MMM DD, YY", "YYYY-MM-DD"];
+        const targetDate = window.moment(deadline, FORMATS, true).startOf('day');
+
+        if (!targetDate.isValid()) {
+            console.warn(
+                `[ProjectUrgencyMotor.evaluate] deadlineDate inválida o con formato ` +
+                `desconocido: "${deadline}". Se omite el escalado de prioridad.`
+            );
+            return currentPriority;
+        }
+
+        const today    = window.moment().startOf('day');
+        const daysLeft = targetDate.diff(today, 'days');
+
         const sizeGroup      = this.getSizeGroup(size);
         const targetPriority = this.calculateTarget(daysLeft, sizeGroup);
-        
+
         const currentWeight = this.getPriorityWeight(currentPriority);
         const targetWeight  = this.getPriorityWeight(targetPriority);
-        
+
         return (targetWeight > currentWeight) ? targetPriority : currentPriority;
     }
 }
@@ -100,7 +113,7 @@ class ProjectEvaluator {
 
             const currentStatus   = node.newStatus   !== null      ? node.newStatus   : node.status;
             let   evaluatedStatus = currentStatus;
-            
+
             const currentEndDate   = node.newEndDate  !== undefined ? node.newEndDate  : node.endDate;
             let   evaluatedEndDate = currentEndDate;
 
@@ -112,7 +125,7 @@ class ProjectEvaluator {
                 const validTasks = node.tasks.filter(tStatus => tStatus !== this.statusMap.canceled);
 
                 if (validTasks.length === 0 && node.tasks.length > 0) {
-                    evaluatedStatus  = this.statusMap.canceled;
+                    evaluatedStatus   = this.statusMap.canceled;
                     evaluatedArchived = true;
                 } else if (validTasks.length > 0) {
                     const allDone       = validTasks.every(tStatus => tStatus === this.statusMap.done);
@@ -139,7 +152,7 @@ class ProjectEvaluator {
             if (evaluatedStatus !== this.statusMap.done && evaluatedStatus !== this.statusMap.canceled) {
                 const currentPriority   = node.newPriority !== null ? node.newPriority : node.priority;
                 const evaluatedPriority = this.urgencyMotor.evaluate(currentPriority, node.size, node.deadlineDate);
-                
+
                 if (evaluatedPriority !== currentPriority) {
                     node.newPriority = evaluatedPriority;
                 }

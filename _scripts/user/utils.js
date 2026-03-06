@@ -128,15 +128,33 @@ class Utils {
     /**
      * Devuelve todos los archivos Markdown del vault cuyo frontmatter
      * tenga el fileClass indicado.
-     * @param {App} app
+     *
+     * [FIX V-10] Acepta un parámetro `cache` (Map) opcional.
+     * Si se pasa, devuelve el resultado desde caché en lugar de re-iterar
+     * el vault completo. Úsalo así dentro de una misma ejecución de macro:
+     *
+     *   const cache = new Map();
+     *   const tasks    = Utils.getFilesByClass(app, 'task', cache);
+     *   const projects = Utils.getFilesByClass(app, 'project', cache);
+     *   // La segunda llamada con 'project' itera el vault; 'task' ya está en caché.
+     *
+     * @param {App}    app
      * @param {string} fileClass
+     * @param {Map}    [cache]   - Map<string, TFile[]> compartido por la ejecución
      * @returns {TFile[]}
      */
-    getFilesByClass(app, fileClass) {
-        return app.vault.getMarkdownFiles().filter(file => {
+    getFilesByClass(app, fileClass, cache) {
+        if (cache) {
+            if (cache.has(fileClass)) return cache.get(fileClass);
+        }
+
+        const result = app.vault.getMarkdownFiles().filter(file => {
             const fm = app.metadataCache.getFileCache(file)?.frontmatter;
             return fm?.fileClass === fileClass;
         });
+
+        if (cache) cache.set(fileClass, result);
+        return result;
     }
 
     /**
@@ -156,12 +174,36 @@ class Utils {
     /**
      * Crea el botón de archivar/desarchivar para una fila de tabla Dataview.
      * Al hacer clic dispara la macro "Move By Archived" de QuickAdd.
+     *
+     * [FIX V-7] El `fieldModifier` de Metadata Menu se recibe como argumento
+     * en lugar de accederse directamente al plugin desde aquí.
+     * Esto elimina el acceso redundante al plugin (que podría no estar listo)
+     * y desacopla Utils de Metadata Menu. El caller (Table._getFieldModifier)
+     * ya valida que el plugin esté disponible antes de llegar aquí.
+     *
+     * Si por alguna razón `f` no llega (llamada legacy desde fuera de Table),
+     * se intenta un fallback defensivo con una advertencia.
+     *
      * @param {DataviewAPI} dv
      * @param {DataviewPage} page
+     * @param {Function} [f] - fieldModifier de Metadata Menu (preferido)
      * @returns {HTMLElement}
      */
-    createArchiveButton(dv, page) {
-        const { fieldModifier: f } = app.plugins.plugins['metadata-menu'].api;
+    createArchiveButton(dv, page, f) {
+        // [FIX V-7] Fallback defensivo si se llama sin pasar `f` (compatibilidad)
+        if (!f) {
+            const plugin = app.plugins?.plugins?.['metadata-menu'];
+            if (!plugin?.api?.fieldModifier) {
+                console.warn(
+                    "[Utils.createArchiveButton] Metadata Menu no disponible y no se recibió " +
+                    "fieldModifier. El botón de archivo no puede renderizarse."
+                );
+                // Retorna un elemento vacío inofensivo en lugar de crashear
+                return dv.el('span', '⚠️');
+            }
+            f = plugin.api.fieldModifier;
+        }
+
         const button = f(dv, page, "archived");
         button.onclick = async () => {
             await this.sleep(500);

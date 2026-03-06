@@ -30,8 +30,10 @@ module.exports = async (params) => {
     }
 
     // ── 2. CONSTRUIR MAPA DE PROYECTOS Y TAREAS ───────────────────────────
-    const projects = _buildProjectsMap(app, Utils);
-    _mapTasksToProjects(app, projects, Utils);
+    // [FIX V-10] Caché compartido para no iterar el vault dos veces
+    const fileCache = new Map();
+    const projects  = _buildProjectsMap(app, Utils, fileCache);
+    _mapTasksToProjects(app, projects, Utils, fileCache);
 
     // ── 3. EVALUAR ────────────────────────────────────────────────────────
     ProjectEvaluator.evaluate(projects);
@@ -53,42 +55,52 @@ module.exports = async (params) => {
 // CONSTRUCCIÓN DEL MAPA
 // ─────────────────────────────────────────────────────────────────────────────
 
-function _buildProjectsMap(app, Utils) {
+function _buildProjectsMap(app, Utils, fileCache) {
     const projects = {};
 
-    for (const file of Utils.getFilesByClass(app, 'project')) {
-        const fm = Utils.getFrontmatter(app, file);
-        if (!fm) continue;
+    // [FIX V-10] Pasar fileCache a getFilesByClass
+    for (const file of Utils.getFilesByClass(app, 'project', fileCache)) {
+        try {
+            const fm = Utils.getFrontmatter(app, file);
+            if (!fm) continue;
 
-        projects[file.basename] = {
-            file,
-            status       : fm.status,
-            priority     : fm.priority,
-            size         : fm.size,
-            startDate    : fm.startDate,
-            deadlineDate : fm.deadlineDate,
-            endDate      : fm.endDate,
-            archived     : fm.archived === true,
-            tasks        : [],
-            newStatus    : null,
-            newPriority  : null,
-            newEndDate   : undefined,
-            newArchived  : null,
-        };
+            projects[file.basename] = {
+                file,
+                status       : fm.status,
+                priority     : fm.priority,
+                size         : fm.size,
+                startDate    : fm.startDate,
+                deadlineDate : fm.deadlineDate,
+                endDate      : fm.endDate,
+                archived     : fm.archived === true,
+                tasks        : [],
+                newStatus    : null,
+                newPriority  : null,
+                newEndDate   : undefined,
+                newArchived  : null,
+            };
+        } catch (err) {
+            console.error(`[_buildProjectsMap] Error procesando "${file.basename}":`, err);
+        }
     }
 
     return projects;
 }
 
-function _mapTasksToProjects(app, projects, Utils) {
-    for (const file of Utils.getFilesByClass(app, 'task')) {
-        const fm = Utils.getFrontmatter(app, file);
-        if (!fm) continue;
+function _mapTasksToProjects(app, projects, Utils, fileCache) {
+    // [FIX V-10] Pasar fileCache a getFilesByClass
+    for (const file of Utils.getFilesByClass(app, 'task', fileCache)) {
+        try {
+            const fm = Utils.getFrontmatter(app, file);
+            if (!fm) continue;
 
-        for (const projectName of Utils.getLinks(fm.project)) {
-            if (projects[projectName]) {
-                projects[projectName].tasks.push(fm.status);
+            for (const projectName of Utils.getLinks(fm.project)) {
+                if (projects[projectName]) {
+                    projects[projectName].tasks.push(fm.status);
+                }
             }
+        } catch (err) {
+            console.error(`[_mapTasksToProjects] Error procesando tarea "${file.basename}":`, err);
         }
     }
 }
@@ -98,8 +110,8 @@ function _mapTasksToProjects(app, projects, Utils) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function _applyChanges(app, quickAddApi, projects) {
-    let updatedCount       = 0;
-    let archivedCount      = 0;
+    let updatedCount        = 0;
+    let archivedCount       = 0;
     let priorityScaledCount = 0;
 
     for (const proj of Object.values(projects)) {
@@ -110,17 +122,26 @@ async function _applyChanges(app, quickAddApi, projects) {
 
         if (!statusChanged && !endDateChanged && !archivedChanged && !priorityChanged) continue;
 
-        await app.fileManager.processFrontMatter(proj.file, (fm) => {
-            if (statusChanged)   fm.status   = proj.newStatus;
-            if (endDateChanged)  fm.endDate  = proj.newEndDate ?? "";
-            if (archivedChanged) fm.archived = proj.newArchived;
-            if (priorityChanged) { fm.priority = proj.newPriority; priorityScaledCount++; }
-        });
-        updatedCount++;
+        // [FIX V-9] try-catch individual por proyecto.
+        // Un fallo en processFrontMatter de un archivo no debe abortar
+        // el resto del bucle de 50+ proyectos.
+        try {
+            await app.fileManager.processFrontMatter(proj.file, (fm) => {
+                if (statusChanged)   fm.status   = proj.newStatus;
+                if (endDateChanged)  fm.endDate  = proj.newEndDate ?? "";
+                if (archivedChanged) fm.archived = proj.newArchived;
+                if (priorityChanged) { fm.priority = proj.newPriority; priorityScaledCount++; }
+            });
+            updatedCount++;
 
-        if (archivedChanged && proj.newArchived === true) {
-            await quickAddApi.executeChoice("Move By Archived", { value: proj.file.path });
-            archivedCount++;
+            if (archivedChanged && proj.newArchived === true) {
+                await quickAddApi.executeChoice("Move By Archived", { value: proj.file.path });
+                archivedCount++;
+            }
+        } catch (err) {
+            console.error(
+                `[_applyChanges] Error persistiendo cambios en el proyecto "${proj.file.basename}":`, err
+            );
         }
     }
 

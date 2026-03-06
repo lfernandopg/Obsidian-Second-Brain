@@ -38,16 +38,17 @@ module.exports = async (params) => {
     const allProjects = Utils.getFilesByClass(app, 'project');
     const allTasks    = Utils.getFilesByClass(app, 'task');
 
-    // Conjuntos de basenames que hay que archivar/recuperar
+    // Conjunto de basenames de proyectos que hay que propagar
     const projectsToProcess = new Set();
-    const filesToProcess    = new Set(); // Set<TFile>
+    // Mapa de basename → TFile para todos los descendientes a procesar
+    const filesToProcess    = new Map(); // Map<basename, TFile>
 
     // Nivel 1 – Área → sus Proyectos
     if (fileClass === 'area') {
         for (const p of allProjects) {
             const pfm = Utils.getFrontmatter(app, p);
             if (Utils.getLinks(pfm?.area).includes(targetFile.basename)) {
-                filesToProcess.add(p);
+                filesToProcess.set(p.basename, p);
                 projectsToProcess.add(p.basename);
             }
         }
@@ -61,23 +62,34 @@ module.exports = async (params) => {
         for (const t of allTasks) {
             const tfm = Utils.getFrontmatter(app, t);
             if (Utils.getLinks(tfm?.project).some(pName => projectsToProcess.has(pName))) {
-                filesToProcess.add(t);
+                filesToProcess.set(t.basename, t);
                 tasksToProcess.add(t.basename);
             }
         }
     }
 
-    // Nivel 3 – Tarea → Subtareas (búsqueda en anchura para profundidad arbitraria)
+    // Nivel 3 – Tarea → Subtareas
+    // [FIX V-11] Se usa un Set<string> de basenames YA VISITADOS separado del
+    // Map de archivos a procesar. En el código anterior se usaba `filesToProcess.has(t)`
+    // donde `t` es un TFile — esto funciona solo si la referencia de objeto es idéntica,
+    // lo cual puede fallar. Además, el BFS añadía basenames a la cola sin garantía
+    // de que todos los ancestros con el mismo basename hubieran sido marcados,
+    // pudiendo entrar en bucle infinito ante ciclos de parentTask.
     if (fileClass === 'task') tasksToProcess.add(targetFile.basename);
 
+    const visitedBasenames = new Set(tasksToProcess); // [FIX V-11] Set de basenames visitados
     const queue = Array.from(tasksToProcess);
+
     while (queue.length > 0) {
         const currentName = queue.shift();
+
         for (const t of allTasks) {
-            if (filesToProcess.has(t)) continue; // ya procesada
             const tfm = Utils.getFrontmatter(app, t);
+            // [FIX V-11] Guardias: ya procesado por basename O la referencia ya está en el mapa
+            if (visitedBasenames.has(t.basename)) continue;
             if (Utils.getLinks(tfm?.parentTask).includes(currentName)) {
-                filesToProcess.add(t);
+                filesToProcess.set(t.basename, t);
+                visitedBasenames.add(t.basename); // [FIX V-11] Marcar antes de encolar
                 queue.push(t.basename);
             }
         }
@@ -85,7 +97,7 @@ module.exports = async (params) => {
 
     // ── APLICAR CAMBIOS A LA DESCENDENCIA ────────────────────────────────
 
-    for (const childFile of filesToProcess) {
+    for (const childFile of filesToProcess.values()) {
         const childFm       = Utils.getFrontmatter(app, childFile);
         const childClass    = childFm?.fileClass;
         const childArchived = childFm?.archived === true;
@@ -93,12 +105,16 @@ module.exports = async (params) => {
         // Solo actuar si el estado de archivo difiere del padre
         if (childArchived === isArchived) continue;
 
-        await app.fileManager.processFrontMatter(childFile, (cfm) => {
-            cfm.archived = isArchived;
-        });
+        try {
+            await app.fileManager.processFrontMatter(childFile, (cfm) => {
+                cfm.archived = isArchived;
+            });
 
-        if (await _moveFile(app, childFile, childClass, isArchived, FileClassMapper, Utils)) {
-            movedCount++;
+            if (await _moveFile(app, childFile, childClass, isArchived, FileClassMapper, Utils)) {
+                movedCount++;
+            }
+        } catch (err) {
+            console.error(`[move_by_archived] Error propagando archived a "${childFile.basename}":`, err);
         }
     }
 

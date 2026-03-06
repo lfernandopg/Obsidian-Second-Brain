@@ -4,17 +4,17 @@
 class SizeMotor {
     constructor(taskSizeMap) {
         this.sMap = taskSizeMap;
-        
+
         this.weightMap = {
             [this.sMap.very_small]: 1,
-            [this.sMap.small]: 2,
-            [this.sMap.medium]: 3,
-            [this.sMap.large]: 5,
+            [this.sMap.small]:      2,
+            [this.sMap.medium]:     3,
+            [this.sMap.large]:      5,
             [this.sMap.very_large]: 8,
-            [this.sMap.huge]: 13,
-            [this.sMap.epic]: 21
+            [this.sMap.huge]:       13,
+            [this.sMap.epic]:       21,
         };
-        
+
         this.thresholds = [
             { limit: 1,        size: this.sMap.very_small },
             { limit: 2,        size: this.sMap.small      },
@@ -22,7 +22,7 @@ class SizeMotor {
             { limit: 5,        size: this.sMap.large      },
             { limit: 8,        size: this.sMap.very_large },
             { limit: 13,       size: this.sMap.huge       },
-            { limit: Infinity, size: this.sMap.epic       }
+            { limit: Infinity, size: this.sMap.epic       },
         ];
     }
 
@@ -45,8 +45,7 @@ class SizeMotor {
             totalWeight += this.getWeight(childSize);
         }
 
-        const targetSize = this.getSizeFromWeight(totalWeight);
-        
+        const targetSize    = this.getSizeFromWeight(totalWeight);
         const currentWeight = this.getWeight(currentParentSize);
         const targetWeight  = this.getWeight(targetSize);
 
@@ -59,21 +58,20 @@ class SizeMotor {
 // ⚙️ CLASE AUXILIAR: MOTOR DE RECURRENCIA Y ANTICIPACIÓN
 // =========================================================================
 class RecurrenceMotor {
-    // sizeMap se inyecta desde SystemBootstrap a través de TaskEvaluator.init()
     constructor(sizeMap) {
         this.sMap = sizeMap;
     }
 
     getSizeGroup(size) {
         if ([this.sMap.epic, this.sMap.huge, this.sMap.very_large].includes(size)) return 3;
-        if ([this.sMap.large, this.sMap.medium].includes(size)) return 2;
+        if ([this.sMap.large, this.sMap.medium].includes(size))                    return 2;
         return 1;
     }
 
     getAnticipationDays(recurrence, sizeGroup) {
         if (!recurrence) return 0;
         if (recurrence.includes("Diario")) return 0;
-        
+
         if (recurrence.includes("Semanal")) {
             if (sizeGroup === 3) return 4;
             if (sizeGroup === 2) return 2;
@@ -96,19 +94,25 @@ class RecurrenceMotor {
         if (status === statusDone) return true;
         if (!deadlineDate || !recurrence) return false;
 
+        // [FIX ADICIONAL] Validar que la fecha es parseable antes de operar
+        const d1 = window.moment(deadlineDate, ["MMM DD, YY - HH:mm", "MMM DD, YY", "YYYY-MM-DD"], true);
+        if (!d1.isValid()) {
+            console.warn(`[RecurrenceMotor.shouldSpawnNext] deadlineDate inválida: "${deadlineDate}"`);
+            return false;
+        }
+
         const today = window.moment().startOf('day');
-        const d1    = window.moment(deadlineDate, ["MMM DD, YY - HH:mm", "MMM DD, YY", "YYYY-MM-DD"]).startOf('day');
-        
+        d1.startOf('day');
+
         let unit = 'days';
         if (recurrence.includes("Semanal")) unit = 'weeks';
         if (recurrence.includes("Mensual")) unit = 'months';
         if (recurrence.includes("Anual"))   unit = 'years';
 
-        const d2 = d1.clone().add(1, unit);
-        
-        const sizeGroup   = this.getSizeGroup(size);
+        const d2         = d1.clone().add(1, unit);
+        const sizeGroup  = this.getSizeGroup(size);
         const anticipation = this.getAnticipationDays(recurrence, sizeGroup);
-        const spawnDate   = d2.clone().subtract(anticipation, 'days');
+        const spawnDate  = d2.clone().subtract(anticipation, 'days');
 
         return today.isSameOrAfter(spawnDate, 'day');
     }
@@ -120,15 +124,24 @@ class RecurrenceMotor {
         if (recurrence.includes("Anual"))   unit = 'years';
 
         const today = window.moment();
-        const d1    = deadlineDate
-            ? window.moment(deadlineDate, ["MMM DD, YY - HH:mm", "MMM DD, YY", "YYYY-MM-DD"])
-            : today.clone();
-        
-        const newDeadline = d1.clone().add(1, unit).format("MMM DD, YY - HH:mm");
-        const newStart    = startDate
-            ? window.moment(startDate, ["MMM DD, YY - HH:mm", "MMM DD, YY", "YYYY-MM-DD"])
-                .add(1, unit).format("MMM DD, YY - HH:mm")
-            : "";
+
+        // [FIX ADICIONAL] Modo estricto de parseo; fallback a hoy si la fecha es inválida
+        const d1 = deadlineDate
+            ? window.moment(deadlineDate, ["MMM DD, YY - HH:mm", "MMM DD, YY", "YYYY-MM-DD"], true)
+            : null;
+        const baseDeadline = (d1 && d1.isValid()) ? d1 : today.clone();
+
+        const newDeadline = baseDeadline.clone().add(1, unit).format("MMM DD, YY - HH:mm");
+
+        let newStart = "";
+        if (startDate) {
+            const d2 = window.moment(startDate, ["MMM DD, YY - HH:mm", "MMM DD, YY", "YYYY-MM-DD"], true);
+            if (d2.isValid()) {
+                newStart = d2.clone().add(1, unit).format("MMM DD, YY - HH:mm");
+            } else {
+                console.warn(`[RecurrenceMotor.calculateNextDates] startDate inválida: "${startDate}"`);
+            }
+        }
 
         return { newDeadline, newStart };
     }
@@ -161,7 +174,7 @@ class UrgencyMotor {
     calculateTarget(daysLeft, sizeGroup) {
         if (daysLeft < 0)  return this.pMap.critical;
         if (daysLeft <= 2) return sizeGroup === 1 ? this.pMap.high : this.pMap.critical;
-        
+
         if (daysLeft <= 6) {
             if (sizeGroup === 1) return this.pMap.medium;
             if (sizeGroup === 2) return this.pMap.high;
@@ -177,17 +190,23 @@ class UrgencyMotor {
 
     evaluate(currentPriority, size, deadline) {
         if (!deadline) return currentPriority;
-        
-        const today      = window.moment().startOf('day');
-        const targetDate = window.moment(deadline, ["MMM DD, YY - HH:mm", "MMM DD, YY", "YYYY-MM-DD"]).startOf('day');
-        const daysLeft   = targetDate.diff(today, 'days');
-        
+
+        // [FIX ADICIONAL] Validación estricta de fecha
+        const targetDate = window.moment(deadline, ["MMM DD, YY - HH:mm", "MMM DD, YY", "YYYY-MM-DD"], true).startOf('day');
+        if (!targetDate.isValid()) {
+            console.warn(`[UrgencyMotor.evaluate] Fecha de deadline inválida: "${deadline}"`);
+            return currentPriority;
+        }
+
+        const today    = window.moment().startOf('day');
+        const daysLeft = targetDate.diff(today, 'days');
+
         const sizeGroup      = this.getSizeGroup(size);
         const targetPriority = this.calculateTarget(daysLeft, sizeGroup);
-        
+
         const currentWeight = this.getPriorityWeight(currentPriority);
         const targetWeight  = this.getPriorityWeight(targetPriority);
-        
+
         return (targetWeight > currentWeight) ? targetPriority : currentPriority;
     }
 }
@@ -198,21 +217,16 @@ class UrgencyMotor {
 // =========================================================================
 class TaskEvaluator {
     constructor() {
-        // Constructor vacío: sin dependencias de customJS.
-        // Debe llamarse init() antes de usar evaluate().
-        this.isInitialized  = false;
-        this.statusMap      = null;
-        this.urgencyMotor   = null;
-        this.sizeMotor      = null;
+        this.isInitialized   = false;
+        this.statusMap       = null;
+        this.urgencyMotor    = null;
+        this.sizeMotor       = null;
         this.recurrenceMotor = null;
     }
 
     /**
      * Inyecta las dependencias necesarias para operar.
      * Llamado por SystemBootstrap.boot().
-     * @param {Object} statusMap
-     * @param {Object} priorityMap
-     * @param {Object} sizeMap
      */
     init(statusMap, priorityMap, sizeMap) {
         this.statusMap       = statusMap;
@@ -227,10 +241,11 @@ class TaskEvaluator {
             throw new Error("TaskEvaluator no ha sido inicializado. Llama a SystemBootstrap.boot() primero.");
         }
 
-        let anyChanges = false;
-        let loopCount  = 0;
-        const MAX_LOOPS      = 10;
-        const nowFormatted   = window.moment().format("MMM DD, YY - HH:mm");
+        let anyChanges   = false;
+        let loopCount    = 0;
+        // [FIX #4] Límite subido a 30 para grafos profundos
+        const MAX_LOOPS    = 30;
+        const nowFormatted = window.moment().format("MMM DD, YY - HH:mm");
 
         do {
             anyChanges = false;
@@ -241,7 +256,7 @@ class TaskEvaluator {
 
                 const currentStatus   = node.newStatus   !== null      ? node.newStatus   : node.status;
                 let   evaluatedStatus = currentStatus;
-                
+
                 const currentEndDate   = node.newEndDate  !== undefined ? node.newEndDate  : node.endDate;
                 let   evaluatedEndDate = currentEndDate;
 
@@ -255,7 +270,7 @@ class TaskEvaluator {
                 });
 
                 if (hasCanceledParent || evaluatedStatus === this.statusMap.canceled) {
-                    evaluatedStatus  = this.statusMap.canceled;
+                    evaluatedStatus   = this.statusMap.canceled;
                     evaluatedArchived = true;
                 } else {
                     // --- REGLA B: Bloqueos Secuenciales ---
@@ -281,7 +296,7 @@ class TaskEvaluator {
                         });
 
                         if (validChildren.length === 0 && node.children.length > 0) {
-                            evaluatedStatus  = this.statusMap.canceled;
+                            evaluatedStatus   = this.statusMap.canceled;
                             evaluatedArchived = true;
                         } else if (validChildren.length > 0) {
                             const allDone = validChildren.every(c =>
@@ -300,7 +315,7 @@ class TaskEvaluator {
                                 if (!evaluatedEndDate) evaluatedEndDate = nowFormatted;
                             } else {
                                 if (currentStatus === this.statusMap.done && anyIncomplete) {
-                                    evaluatedStatus = this.statusMap.in_progress;
+                                    evaluatedStatus  = this.statusMap.in_progress;
                                     evaluatedEndDate = null;
                                 } else if (anyActive && (evaluatedStatus === this.statusMap.inbox || evaluatedStatus === this.statusMap.planned)) {
                                     evaluatedStatus = this.statusMap.in_progress;
@@ -325,7 +340,7 @@ class TaskEvaluator {
                 if (evaluatedStatus !== this.statusMap.done && evaluatedStatus !== this.statusMap.canceled) {
                     const currentPriority   = node.newPriority !== null ? node.newPriority : node.priority;
                     const evaluatedPriority = this.urgencyMotor.evaluate(currentPriority, node.size, node.deadlineDate);
-                    
+
                     if (evaluatedPriority !== currentPriority) {
                         node.newPriority = evaluatedPriority;
                         anyChanges = true;
@@ -334,9 +349,9 @@ class TaskEvaluator {
 
                 // --- REGLA F: HERENCIA DE PRIORIDAD (Top-Down) ---
                 if (evaluatedStatus !== this.statusMap.done && evaluatedStatus !== this.statusMap.canceled) {
-                    const currentPriority        = node.newPriority !== null ? node.newPriority : node.priority;
-                    let   highestTargetPriority  = currentPriority;
-                    let   highestWeight          = this.urgencyMotor.getPriorityWeight(currentPriority);
+                    const currentPriority       = node.newPriority !== null ? node.newPriority : node.priority;
+                    let   highestTargetPriority = currentPriority;
+                    let   highestWeight         = this.urgencyMotor.getPriorityWeight(currentPriority);
 
                     if (node.projects && node.projects.length > 0) {
                         for (const pName of node.projects) {
@@ -374,7 +389,7 @@ class TaskEvaluator {
                 // --- REGLA G: ESCALADO DE TAMAÑO (Bottom-Up) ---
                 if (!isLeafFinal && evaluatedStatus !== this.statusMap.canceled) {
                     const currentSize = node.newSize !== null ? node.newSize : node.size;
-                    
+
                     const childrenSizes = node.children.map(childName => {
                         const cNode = graph[childName];
                         if (!cNode) return null;
@@ -407,5 +422,14 @@ class TaskEvaluator {
             }
 
         } while (anyChanges && loopCount < MAX_LOOPS);
+
+        // [FIX #4] Warn claro si se alcanza el límite máximo de iteraciones
+        if (loopCount >= MAX_LOOPS && anyChanges) {
+            console.warn(
+                `[TaskEvaluator] ⚠️ Se alcanzó el límite máximo de ${MAX_LOOPS} iteraciones ` +
+                `con cambios pendientes. El grafo puede tener ciclos o ser excesivamente profundo. ` +
+                `Revisa las dependencias parentTask/nextTask de tus tareas.`
+            );
+        }
     }
 }
