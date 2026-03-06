@@ -26,7 +26,7 @@ fieldsOrder:
   - ainYKk
   - MUtO0S
   - GQpBlY
-version: "2.46"
+version: "2.47"
 fields:
   - name: name
     type: Input
