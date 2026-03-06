@@ -15,8 +15,7 @@ module.exports = async (params) => {
     const graph = _buildGraph(app, allTasks, Utils);
 
     // ── 3. EVALUAR ESTADOS Y PRIORIDADES ──────────────────────────────────
-    const evaluator = new TaskEvaluator();
-    evaluator.evaluate(graph, projectPriorities); // <-- AHORA PASAMOS EL MAPA
+    TaskEvaluator.evaluate(graph, projectPriorities); // <-- AHORA PASAMOS EL MAPA
 
     // ── 4. PERSISTIR CAMBIOS ──────────────────────────────────────────────
     const { updatedCount, archivedCount, priorityScaledCount, sizeScaledCount } = await _applyChanges(app, quickAddApi, graph);
@@ -127,7 +126,7 @@ async function _applyChanges(app, quickAddApi, graph) {
 // ─────────────────────────────────────────────────────────────────────────────
 async function _processRecurrences(app, graph, statusMap) {
     // Instanciamos la lógica matemática que definimos en task_evaluator
-    const motor = new customJS.RecurrenceMotor(customJS.FileClassMapper.SIZE_MAP);
+    const motor = customJS.RecurrenceMotor;
     let createdCount = 0;
     const today = window.moment();
 

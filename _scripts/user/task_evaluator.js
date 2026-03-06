@@ -64,8 +64,8 @@ class SizeMotor {
 // ⚙️ CLASE AUXILIAR: MOTOR DE RECURRENCIA Y ANTICIPACIÓN
 // =========================================================================
 class RecurrenceMotor {
-    constructor(taskSizeMap) {
-        this.sMap = taskSizeMap;
+    constructor() {
+        this.sMap = customJS.FileClassMapper.SIZE_MAP;
     }
 
     // Clasifica las tareas en 3 grupos de peso (1: Ligero, 2: Medio, 3: Pesado)

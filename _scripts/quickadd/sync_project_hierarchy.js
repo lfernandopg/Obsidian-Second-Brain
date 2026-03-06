@@ -41,8 +41,7 @@ module.exports = async (params) => {
     // ── 3. EVALUAR ────────────────────────────────────────────────────────
 
     const { ProjectEvaluator } = customJS;
-    const evaluator = new ProjectEvaluator();
-    evaluator.evaluate(projects);
+    ProjectEvaluator.evaluate(projects);
 
     // ── 4. PERSISTIR CAMBIOS ──────────────────────────────────────────────
 
