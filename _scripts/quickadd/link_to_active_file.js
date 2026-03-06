@@ -52,9 +52,19 @@ module.exports = async (params) => {
 
         // 5. Flujo de Creación vs Selección de nota existente
         if (variables && variables.create === true) {
+            
+            // 🚀 NUEVO: Lógica de Herencia de Propiedades 🚀
+            const fm = activeFileCache?.frontmatter;
+            const inheritProps = {};
+            
+            // Extraer el area y project de la nota padre si existen
+            if (fm?.area) inheritProps.area = fm.area;
+            if (fm?.project) inheritProps.project = fm.project;
+
             const creationVars = {
                 fileClass: fileClassRelation,
-                result: { createdFilePath: null }
+                result: { createdFilePath: null },
+                inheritProperties: inheritProps // Enviamos el paquete al script creador
             };
             
             // Llamamos al otro script blindado para crear la nota
@@ -62,11 +72,9 @@ module.exports = async (params) => {
 
             const createdFilePath = creationVars.result?.createdFilePath;
             if (!createdFilePath) {
-                // Si el usuario canceló la creación a medio camino, salimos en silencio
-                return; 
+                return; // Si el usuario canceló la creación, salimos en silencio
             }
             
-            // Validar que el archivo recién creado realmente exista en el vault
             relatedFile = app.vault.getAbstractFileByPath(createdFilePath);
             if (!relatedFile) {
                 throw new Error(`No se pudo encontrar el archivo recién creado en la ruta: ${createdFilePath}`);
@@ -88,7 +96,6 @@ module.exports = async (params) => {
                     && file.path !== templatePath;
             });
 
-            // Blindaje: Prevenir Suggester vacío
             if (validFiles.length === 0) {
                 new Notice(`⚠️ No hay archivos de tipo '${fileClassRelation}' disponibles para enlazar.`);
                 return;
@@ -97,7 +104,7 @@ module.exports = async (params) => {
             const fileNames = validFiles.map(f => f.basename);
             const selectedFile = await quickAddApi.suggester(fileNames, validFiles);
             
-            if (!selectedFile) return; // Cancelado por el usuario
+            if (!selectedFile) return; 
             
             relatedFile = selectedFile;
             relatedFilePath = selectedFile.path;
@@ -107,25 +114,20 @@ module.exports = async (params) => {
         let targetFilePath;
         let propertiesToUpdate;
         let linkText;
-        let targetFileName; // Para el mensaje de éxito
+        let targetFileName;
 
         if (linkDirection === 'inward') {
-            // La nota NUEVA/RELACIONADA apunta a la ACTIVA
             targetFilePath = relatedFilePath;
             linkText = `[[${activeFile.basename}]]`;
             propertiesToUpdate = { [propertyToUpdate]: linkText };
             targetFileName = activeFile.basename; 
-
         } else { 
-            // 'outward' (por defecto)
-            // La nota ACTIVA apunta a la NUEVA/RELACIONADA
             targetFilePath = activeFile.path;
             linkText = `[[${relatedFile.basename}]]`;
             propertiesToUpdate = { [propertyToUpdate]: linkText };
             targetFileName = relatedFile.basename;
         }
 
-        // Pausa breve para asegurar que la caché de Obsidian indexe el archivo si fue recién creado
         await Utils.sleep(500); 
 
         // 7. Ejecutar actualización de frontmatter delegando a QuickAdd
@@ -134,7 +136,6 @@ module.exports = async (params) => {
             properties: propertiesToUpdate
         });
         
-        // Mensaje de éxito dinámico y claro
         const linkedFromName = linkDirection === 'inward' ? relatedFile.basename : activeFile.basename;
         new Notice(`🔗 Linked: ${linkedFromName} ➡️ ${targetFileName}`);
 

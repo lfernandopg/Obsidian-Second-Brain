@@ -1,6 +1,6 @@
 module.exports = async (params) => {
     const { app, quickAddApi } = params;
-    const { FileClassMapper, Utils } = customJS;
+    const { FileClassMapper } = customJS;
     const statusMap = FileClassMapper.STATUS_MAP;
 
     const getNowFormatted = () => window.moment().format("MMM DD, YY - HH:mm");

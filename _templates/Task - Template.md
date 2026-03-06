@@ -1,6 +1,5 @@
 ---
 fileClass: task
-name:
 area:
 project:
 status:
