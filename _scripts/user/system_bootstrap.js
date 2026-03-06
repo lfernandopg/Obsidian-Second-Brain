@@ -16,29 +16,24 @@ class SystemBootstrap {
     boot() {
         if (this.isReady) return;
 
-        const { FileClassMapper, TaskEvaluator, ProjectEvaluator } = customJS;
+        const { FileClassMapper, TaskEvaluator, ProjectEvaluator, Table } = customJS;
 
-        if (!FileClassMapper) {
-            throw new Error("SystemBootstrap: FileClassMapper no está disponible en customJS.");
-        }
-        if (!TaskEvaluator) {
-            throw new Error("SystemBootstrap: TaskEvaluator no está disponible en customJS.");
-        }
-        if (!ProjectEvaluator) {
-            throw new Error("SystemBootstrap: ProjectEvaluator no está disponible en customJS.");
+        // Validaciones...
+        if (!FileClassMapper || !TaskEvaluator || !ProjectEvaluator || !Table) {
+            throw new Error("SystemBootstrap: Faltan módulos en customJS.");
         }
 
         // ── Extraer diccionarios desde FileClassMapper ────────────────────
         const statusMap      = FileClassMapper.STATUS_MAP;
         const priorityMap    = FileClassMapper.PRIORITY_MAP;
-        const sizeMap        = FileClassMapper.SIZE_MAP;               // taskSizeMap
+        const sizeMap        = FileClassMapper.SIZE_MAP;
         const projectSizeMap = FileClassMapper.ALL_VALUES.projectSizeMap ?? {};
+        const tablesConfig   = FileClassMapper.TABLES_CONFIG; // <-- NUEVO
 
-        // ── Inyectar en TaskEvaluator ─────────────────────────────────────
+        // ── Inyectar Dependencias ─────────────────────────────────────
         TaskEvaluator.init(statusMap, priorityMap, sizeMap);
-
-        // ── Inyectar en ProjectEvaluator ──────────────────────────────────
         ProjectEvaluator.init(statusMap, priorityMap, projectSizeMap);
+        Table.init(tablesConfig, statusMap); // <-- NUEVO: Inyectamos la tabla
 
         this.isReady = true;
     }
