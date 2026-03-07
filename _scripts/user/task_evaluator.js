@@ -77,7 +77,7 @@ class TaskEvaluator {
             if (status === statusDone) return true;
             if (!deadlineDate || !recurrence) return false;
 
-            const d1 = window.moment(deadlineDate, ["MMM DD, YY - HH:mm", "MMM DD, YY", "YYYY-MM-DD"], true);
+            const d1 = window.moment(deadlineDate, ["MMM DD, yy - HH:mm", "MMM DD, YY", "YYYY-MM-DD"], true);
             if (!d1.isValid()) return false;
 
             const today = window.moment().startOf('day');

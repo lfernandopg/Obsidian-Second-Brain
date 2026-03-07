@@ -58,7 +58,7 @@ class ProjectEvaluator {
         evaluate(currentPriority, size, deadline) {
             if (!deadline) return currentPriority;
 
-            const FORMATS = ["MMM DD, YY - HH:mm", "MMM DD, YY", "YYYY-MM-DD"];
+            const FORMATS = ["MMM DD, yy"];
             const targetDate = window.moment(deadline, FORMATS, true).startOf('day');
 
             if (!targetDate.isValid()) {
@@ -93,7 +93,7 @@ class ProjectEvaluator {
             throw new Error("ProjectEvaluator no ha sido inicializado.");
         }
 
-        const nowFormatted = window.moment().format("MMM DD, YY - HH:mm");
+        const nowFormatted = window.moment().format("MMM DD, yy");
 
         for (const node of Object.values(projects)) {
             if (node.archived) continue;
