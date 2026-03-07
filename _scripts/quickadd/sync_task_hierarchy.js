@@ -7,15 +7,20 @@ module.exports = async (params) => {
     const { Utils, TaskEvaluator, FileClassMapper } = customJS;
 
     // ── 1. MAPEAR PRIORIDADES DE PROYECTOS (TOP-DOWN) ─────────────────────
-    // [FIX V-10] Caché compartido para evitar iterar el vault dos veces
-    // (una por 'project' y otra por 'task'). Con vaults grandes esto es relevante.
     const fileCache = new Map();
+
+    // Instanciar el motor de urgencia de proyectos para evaluarlos en memoria
+    const projectUrgencyMotor = customJS.ProjectEvaluator.urgencyMotor
 
     const allProjects       = Utils.getFilesByClass(app, 'project', fileCache);
     const projectPriorities = {};
     for (const p of allProjects) {
         const pFm = Utils.getFrontmatter(app, p);
-        if (pFm && pFm.priority) projectPriorities[p.basename] = pFm.priority;
+        if (pFm) {
+            // Evaluamos la prioridad del proyecto en memoria (por si su deadline está cerca)
+            const evaluatedPriority = projectUrgencyMotor.evaluate(pFm.priority, pFm.size, pFm.deadlineDate);
+            projectPriorities[p.basename] = evaluatedPriority;
+        }
     }
 
     // ── 2. CONSTRUIR GRAFO ────────────────────────────────────────────────

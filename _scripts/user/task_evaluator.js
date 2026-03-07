@@ -266,12 +266,13 @@ class TaskEvaluator {
                     }
                 }
 
-                // --- REGLA F: HERENCIA DE PRIORIDAD (Top-Down) ---
+                // --- REGLA F: HERENCIA DE PRIORIDAD (Bidireccional) ---
                 if (evaluatedStatus !== this.statusMap.done && evaluatedStatus !== this.statusMap.canceled) {
                     const currentPriority       = node.newPriority !== null ? node.newPriority : node.priority;
                     let   highestTargetPriority = currentPriority;
                     let   highestWeight         = this.urgencyMotor.getPriorityWeight(currentPriority);
 
+                    // 1. Herencia desde Proyectos
                     if (node.projects && node.projects.length > 0) {
                         for (const pName of node.projects) {
                             const pPriority = projectPriorities[pName];
@@ -285,6 +286,7 @@ class TaskEvaluator {
                         }
                     }
 
+                    // 2. Herencia desde Tareas Padre (Top-Down)
                     if (node.parentTasks.length > 0) {
                         for (const parentName of node.parentTasks) {
                             const parentNode = graph[parentName];
@@ -294,6 +296,21 @@ class TaskEvaluator {
                                 if (parentWeight > highestWeight) {
                                     highestWeight         = parentWeight;
                                     highestTargetPriority = parentPriority;
+                                }
+                            }
+                        }
+                    }
+
+                    // 3. Herencia desde Tareas Hijas (Bottom-Up) - NUEVO
+                    if (node.children.length > 0) {
+                        for (const childName of node.children) {
+                            const childNode = graph[childName];
+                            if (childNode) {
+                                const childPriority = childNode.newPriority !== null ? childNode.newPriority : childNode.priority;
+                                const childWeight   = this.urgencyMotor.getPriorityWeight(childPriority);
+                                if (childWeight > highestWeight) {
+                                    highestWeight         = childWeight;
+                                    highestTargetPriority = childPriority;
                                 }
                             }
                         }
