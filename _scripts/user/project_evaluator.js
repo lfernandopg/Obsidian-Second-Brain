@@ -1,109 +1,96 @@
 // =========================================================================
-// ⚙️ CLASE AUXILIAR: MOTOR DE URGENCIA PARA PROYECTOS
-// =========================================================================
-class ProjectUrgencyMotor {
-    constructor(priorityMap, projectSizeMap) {
-        this.pMap = priorityMap;
-        this.sMap = projectSizeMap;
-    }
-
-    getPriorityWeight(priority) {
-        if (priority === this.pMap.critical) return 4;
-        if (priority === this.pMap.high)     return 3;
-        if (priority === this.pMap.medium)   return 2;
-        if (priority === this.pMap.low)      return 1;
-        return 0;
-    }
-
-    getSizeGroup(size) {
-        if ([this.sMap.half_year, this.sMap.year].includes(size))    return 3;
-        if ([this.sMap.month,     this.sMap.quarter].includes(size)) return 2;
-        return 1;
-    }
-
-    calculateTarget(daysLeft, sizeGroup) {
-        if (daysLeft < 0) return this.pMap.critical;
-
-        if (sizeGroup === 1) {
-            if (daysLeft <= 3)  return this.pMap.critical;
-            if (daysLeft <= 7)  return this.pMap.high;
-            if (daysLeft <= 10) return this.pMap.medium;
-            return this.pMap.low;
-        }
-        if (sizeGroup === 2) {
-            if (daysLeft <= 7)  return this.pMap.critical;
-            if (daysLeft <= 15) return this.pMap.high;
-            if (daysLeft <= 30) return this.pMap.medium;
-            return this.pMap.low;
-        }
-        if (sizeGroup === 3) {
-            if (daysLeft <= 15) return this.pMap.critical;
-            if (daysLeft <= 30) return this.pMap.high;
-            if (daysLeft <= 60) return this.pMap.medium;
-            return this.pMap.low;
-        }
-        return this.pMap.low;
-    }
-
-    evaluate(currentPriority, size, deadline) {
-        if (!deadline) return currentPriority;
-
-        // [FIX V-6] Modo estricto de parseo (tercer argumento `true`).
-        // Moment en modo permisivo acepta cadenas inválidas y produce fechas
-        // silenciosamente incorrectas. El modo estricto falla rápido y claro.
-        const FORMATS = ["MMM DD, YY - HH:mm", "MMM DD, YY", "YYYY-MM-DD"];
-        const targetDate = window.moment(deadline, FORMATS, true).startOf('day');
-
-        if (!targetDate.isValid()) {
-            console.warn(
-                `[ProjectUrgencyMotor.evaluate] deadlineDate inválida o con formato ` +
-                `desconocido: "${deadline}". Se omite el escalado de prioridad.`
-            );
-            return currentPriority;
-        }
-
-        const today    = window.moment().startOf('day');
-        const daysLeft = targetDate.diff(today, 'days');
-
-        const sizeGroup      = this.getSizeGroup(size);
-        const targetPriority = this.calculateTarget(daysLeft, sizeGroup);
-
-        const currentWeight = this.getPriorityWeight(currentPriority);
-        const targetWeight  = this.getPriorityWeight(targetPriority);
-
-        return (targetWeight > currentWeight) ? targetPriority : currentPriority;
-    }
-}
-
-
-// =========================================================================
-// 🧠 CLASE PRINCIPAL: EVALUADOR DE PROYECTOS
+// 🧠 CLASE PRINCIPAL: EVALUADOR DE PROYECTOS (Con Clases Anidadas)
 // =========================================================================
 class ProjectEvaluator {
     constructor() {
-        // Constructor vacío: sin dependencias de customJS.
-        // Debe llamarse init() antes de usar evaluate().
         this.isInitialized = false;
         this.statusMap     = null;
         this.urgencyMotor  = null;
     }
 
+    // --- CLASE ANIDADA: MOTOR DE URGENCIA ESPECÍFICO PARA PROYECTOS ---
+    static UrgencyMotor = class {
+        constructor(priorityMap, projectSizeMap) {
+            this.pMap = priorityMap;
+            this.sMap = projectSizeMap;
+        }
+
+        getPriorityWeight(priority) {
+            const weights = {
+                [this.pMap.critical]: 4,
+                [this.pMap.high]:     3,
+                [this.pMap.medium]:   2,
+                [this.pMap.low]:      1
+            };
+            return weights[priority] || 0;
+        }
+
+        getSizeGroup(size) {
+            if ([this.sMap.half_year, this.sMap.year].includes(size))    return 3;
+            if ([this.sMap.month,     this.sMap.quarter].includes(size)) return 2;
+            return 1;
+        }
+
+        calculateTarget(daysLeft, sizeGroup) {
+            if (daysLeft < 0) return this.pMap.critical;
+
+            if (sizeGroup === 1) {
+                if (daysLeft <= 3)  return this.pMap.critical;
+                if (daysLeft <= 7)  return this.pMap.high;
+                if (daysLeft <= 10) return this.pMap.medium;
+                return this.pMap.low;
+            }
+            if (sizeGroup === 2) {
+                if (daysLeft <= 7)  return this.pMap.critical;
+                if (daysLeft <= 15) return this.pMap.high;
+                if (daysLeft <= 30) return this.pMap.medium;
+                return this.pMap.low;
+            }
+            if (sizeGroup === 3) {
+                if (daysLeft <= 15) return this.pMap.critical;
+                if (daysLeft <= 30) return this.pMap.high;
+                if (daysLeft <= 60) return this.pMap.medium;
+                return this.pMap.low;
+            }
+            return this.pMap.low;
+        }
+
+        evaluate(currentPriority, size, deadline) {
+            if (!deadline) return currentPriority;
+
+            const FORMATS = ["MMM DD, YY - HH:mm", "MMM DD, YY", "YYYY-MM-DD"];
+            const targetDate = window.moment(deadline, FORMATS, true).startOf('day');
+
+            if (!targetDate.isValid()) {
+                console.warn(`[ProjectEvaluator.UrgencyMotor] deadlineDate inválida: "${deadline}"`);
+                return currentPriority;
+            }
+
+            const today    = window.moment().startOf('day');
+            const daysLeft = targetDate.diff(today, 'days');
+            const sizeGroup = this.getSizeGroup(size);
+            const targetPriority = this.calculateTarget(daysLeft, sizeGroup);
+
+            const currentWeight = this.getPriorityWeight(currentPriority);
+            const targetWeight  = this.getPriorityWeight(targetPriority);
+
+            return (targetWeight > currentWeight) ? targetPriority : currentPriority;
+        }
+    }
+
     /**
-     * Inyecta las dependencias necesarias para operar.
-     * Llamado por SystemBootstrap.boot().
-     * @param {Object} statusMap
-     * @param {Object} priorityMap
-     * @param {Object} projectSizeMap
+     * Inyecta las dependencias e instancia el motor anidado.
      */
     init(statusMap, priorityMap, projectSizeMap) {
         this.statusMap    = statusMap;
-        this.urgencyMotor = new ProjectUrgencyMotor(priorityMap, projectSizeMap);
+        // Instanciación de la clase anidada
+        this.urgencyMotor = new ProjectEvaluator.UrgencyMotor(priorityMap, projectSizeMap);
         this.isInitialized = true;
     }
 
     evaluate(projects) {
         if (!this.isInitialized) {
-            throw new Error("ProjectEvaluator no ha sido inicializado. Llama a SystemBootstrap.boot() primero.");
+            throw new Error("ProjectEvaluator no ha sido inicializado.");
         }
 
         const nowFormatted = window.moment().format("MMM DD, YY - HH:mm");
@@ -158,16 +145,12 @@ class ProjectEvaluator {
                 }
             }
 
-            // --- Registro Interno de Cambios ---
-            if (evaluatedStatus !== currentStatus) {
-                node.newStatus = evaluatedStatus;
-            }
+            // --- Registro de Cambios ---
+            if (evaluatedStatus !== currentStatus) node.newStatus = evaluatedStatus;
             if (evaluatedEndDate !== currentEndDate && !(evaluatedEndDate === null && !currentEndDate)) {
                 node.newEndDate = evaluatedEndDate;
             }
-            if (evaluatedArchived !== currentArchived) {
-                node.newArchived = evaluatedArchived;
-            }
+            if (evaluatedArchived !== currentArchived) node.newArchived = evaluatedArchived;
         }
     }
 }
