@@ -162,7 +162,8 @@ class TaskEvaluator {
 
         let anyChanges   = false;
         let loopCount    = 0;
-        const MAX_LOOPS  = 30;
+        // [FIX #4] Límite subido a 30 para grafos profundos
+        const MAX_LOOPS    = 30;
         const nowFormatted = window.moment().format("MMM DD, YY - HH:mm");
 
         do {
@@ -172,24 +173,182 @@ class TaskEvaluator {
             for (const node of Object.values(graph)) {
                 if (node.archived) continue;
 
-                const currentStatus = node.newStatus !== null ? node.newStatus : node.status;
-                let evaluatedStatus = currentStatus;
-                const currentEndDate = node.newEndDate !== undefined ? node.newEndDate : node.endDate;
-                let evaluatedEndDate = currentEndDate;
-                const currentArchived = node.newArchived !== null ? node.newArchived : node.archived;
-                let evaluatedArchived = currentArchived;
+                const currentStatus   = node.newStatus   !== null      ? node.newStatus   : node.status;
+                let   evaluatedStatus = currentStatus;
 
-                // --- Lógica de Negocio (Reglas A-G) ---
-                // (Se mantiene igual que tu código original, solo que ahora utiliza los motores internos)
-                
-                // ... [Resto de tu lógica de evaluación aquí] ...
-                // Nota: El código dentro del loop 'for' permanece idéntico.
+                const currentEndDate   = node.newEndDate  !== undefined ? node.newEndDate  : node.endDate;
+                let   evaluatedEndDate = currentEndDate;
+
+                const currentArchived   = node.newArchived !== null      ? node.newArchived : node.archived;
+                let   evaluatedArchived = currentArchived;
+
+                // --- REGLA A: Cancelación en Cascada ---
+                const hasCanceledParent = node.parentTasks.some(pName => {
+                    const pNode = graph[pName];
+                    return pNode && (pNode.newStatus !== null ? pNode.newStatus : pNode.status) === this.statusMap.canceled;
+                });
+
+                if (hasCanceledParent || evaluatedStatus === this.statusMap.canceled) {
+                    evaluatedStatus   = this.statusMap.canceled;
+                    evaluatedArchived = true;
+                } else {
+                    // --- REGLA B: Bloqueos Secuenciales ---
+                    const hasIncompletePrevious = node.previousTasks.some(prevName => {
+                        const prevNode = graph[prevName];
+                        if (!prevNode) return false;
+                        const prevStat = prevNode.newStatus !== null ? prevNode.newStatus : prevNode.status;
+                        return prevStat !== this.statusMap.done && prevStat !== this.statusMap.canceled;
+                    });
+
+                    if (hasIncompletePrevious) {
+                        evaluatedStatus = this.statusMap.blocked;
+                    } else if (currentStatus === this.statusMap.blocked) {
+                        evaluatedStatus = this.statusMap.planned;
+                    }
+
+                    // --- REGLA C: Evaluación por Hijos (Subtareas) ---
+                    const isLeaf = node.children.length === 0;
+                    if (!isLeaf) {
+                        const validChildren = node.children.filter(childName => {
+                            const cNode = graph[childName];
+                            return cNode && (cNode.newStatus !== null ? cNode.newStatus : cNode.status) !== this.statusMap.canceled;
+                        });
+
+                        if (validChildren.length === 0 && node.children.length > 0) {
+                            evaluatedStatus   = this.statusMap.canceled;
+                            evaluatedArchived = true;
+                        } else if (validChildren.length > 0) {
+                            const allDone = validChildren.every(c =>
+                                (graph[c].newStatus !== null ? graph[c].newStatus : graph[c].status) === this.statusMap.done
+                            );
+                            const anyActive = validChildren.some(c => {
+                                const stat = graph[c].newStatus !== null ? graph[c].newStatus : graph[c].status;
+                                return stat === this.statusMap.in_progress || stat === this.statusMap.done;
+                            });
+                            const anyIncomplete = validChildren.some(c =>
+                                (graph[c].newStatus !== null ? graph[c].newStatus : graph[c].status) !== this.statusMap.done
+                            );
+
+                            if (allDone) {
+                                evaluatedStatus = this.statusMap.done;
+                                if (!evaluatedEndDate) evaluatedEndDate = nowFormatted;
+                            } else {
+                                if (currentStatus === this.statusMap.done && anyIncomplete) {
+                                    evaluatedStatus  = this.statusMap.in_progress;
+                                    evaluatedEndDate = null;
+                                } else if (anyActive && (evaluatedStatus === this.statusMap.inbox || evaluatedStatus === this.statusMap.planned)) {
+                                    evaluatedStatus = this.statusMap.in_progress;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // --- REGLA D: Cierre de Tareas Hoja ---
+                const isLeafFinal = node.children.length === 0;
+                if (isLeafFinal && evaluatedStatus !== this.statusMap.canceled) {
+                    if (evaluatedEndDate && evaluatedStatus !== this.statusMap.done) {
+                        evaluatedStatus = this.statusMap.done;
+                    }
+                    if (evaluatedStatus === this.statusMap.done && !evaluatedEndDate) {
+                        evaluatedEndDate = nowFormatted;
+                    }
+                }
+
+                // --- REGLA E: MOTOR DE URGENCIA ---
+                if (evaluatedStatus !== this.statusMap.done && evaluatedStatus !== this.statusMap.canceled) {
+                    const currentPriority   = node.newPriority !== null ? node.newPriority : node.priority;
+                    const evaluatedPriority = this.urgencyMotor.evaluate(currentPriority, node.size, node.deadlineDate);
+
+                    if (evaluatedPriority !== currentPriority) {
+                        node.newPriority = evaluatedPriority;
+                        anyChanges = true;
+                    }
+                }
+
+                // --- REGLA F: HERENCIA DE PRIORIDAD (Top-Down) ---
+                if (evaluatedStatus !== this.statusMap.done && evaluatedStatus !== this.statusMap.canceled) {
+                    const currentPriority       = node.newPriority !== null ? node.newPriority : node.priority;
+                    let   highestTargetPriority = currentPriority;
+                    let   highestWeight         = this.urgencyMotor.getPriorityWeight(currentPriority);
+
+                    if (node.projects && node.projects.length > 0) {
+                        for (const pName of node.projects) {
+                            const pPriority = projectPriorities[pName];
+                            if (pPriority) {
+                                const pWeight = this.urgencyMotor.getPriorityWeight(pPriority);
+                                if (pWeight > highestWeight) {
+                                    highestWeight         = pWeight;
+                                    highestTargetPriority = pPriority;
+                                }
+                            }
+                        }
+                    }
+
+                    if (node.parentTasks.length > 0) {
+                        for (const parentName of node.parentTasks) {
+                            const parentNode = graph[parentName];
+                            if (parentNode) {
+                                const parentPriority = parentNode.newPriority !== null ? parentNode.newPriority : parentNode.priority;
+                                const parentWeight   = this.urgencyMotor.getPriorityWeight(parentPriority);
+                                if (parentWeight > highestWeight) {
+                                    highestWeight         = parentWeight;
+                                    highestTargetPriority = parentPriority;
+                                }
+                            }
+                        }
+                    }
+
+                    if (highestTargetPriority !== currentPriority) {
+                        node.newPriority = highestTargetPriority;
+                        anyChanges = true;
+                    }
+                }
+
+                // --- REGLA G: ESCALADO DE TAMAÑO (Bottom-Up) ---
+                if (!isLeafFinal && evaluatedStatus !== this.statusMap.canceled) {
+                    const currentSize = node.newSize !== null ? node.newSize : node.size;
+
+                    const childrenSizes = node.children.map(childName => {
+                        const cNode = graph[childName];
+                        if (!cNode) return null;
+                        const cStatus = cNode.newStatus !== null ? cNode.newStatus : cNode.status;
+                        if (cStatus === this.statusMap.canceled) return null;
+                        return cNode.newSize !== null ? cNode.newSize : cNode.size;
+                    }).filter(Boolean);
+
+                    const evaluatedSize = this.sizeMotor.evaluate(currentSize, childrenSizes);
+
+                    if (evaluatedSize !== currentSize) {
+                        node.newSize = evaluatedSize;
+                        anyChanges   = true;
+                    }
+                }
+
+                // --- Registro Interno de Cambios de Estado ---
+                if (evaluatedStatus !== currentStatus) {
+                    node.newStatus = evaluatedStatus;
+                    anyChanges     = true;
+                }
+                if (evaluatedEndDate !== currentEndDate && !(evaluatedEndDate === null && !currentEndDate)) {
+                    node.newEndDate = evaluatedEndDate;
+                    anyChanges      = true;
+                }
+                if (evaluatedArchived !== currentArchived) {
+                    node.newArchived = evaluatedArchived;
+                    anyChanges       = true;
+                }
             }
 
         } while (anyChanges && loopCount < MAX_LOOPS);
 
+        // [FIX #4] Warn claro si se alcanza el límite máximo de iteraciones
         if (loopCount >= MAX_LOOPS && anyChanges) {
-            console.warn(`[TaskEvaluator] ⚠️ Límite de iteraciones alcanzado.`);
+            console.warn(
+                `[TaskEvaluator] ⚠️ Se alcanzó el límite máximo de ${MAX_LOOPS} iteraciones ` +
+                `con cambios pendientes. El grafo puede tener ciclos o ser excesivamente profundo. ` +
+                `Revisa las dependencias parentTask/nextTask de tus tareas.`
+            );
         }
     }
 }
