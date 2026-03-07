@@ -77,7 +77,7 @@ class TaskEvaluator {
             if (status === statusDone) return true;
             if (!deadlineDate || !recurrence) return false;
 
-            const d1 = window.moment(deadlineDate, ["MMM DD, yy - HH:mm", "MMM DD, YY", "YYYY-MM-DD"], true);
+            const d1 = window.moment(deadlineDate, ["MMM DD, yy - HH:mm"], false);
             if (!d1.isValid()) return false;
 
             const today = window.moment().startOf('day');
@@ -94,14 +94,14 @@ class TaskEvaluator {
         calculateNextDates(deadlineDate, startDate, recurrence) {
             let unit = recurrence.includes("Semanal") ? 'weeks' : (recurrence.includes("Mensual") ? 'months' : (recurrence.includes("Anual") ? 'years' : 'days'));
             const today = window.moment();
-            const d1 = deadlineDate ? window.moment(deadlineDate, ["MMM DD, YY - HH:mm", "MMM DD, YY", "YYYY-MM-DD"], true) : null;
+            const d1 = deadlineDate ? window.moment(deadlineDate, ["MMM DD, yy - HH:mm"], false) : null;
             const baseDeadline = (d1 && d1.isValid()) ? d1 : today.clone();
-            const newDeadline = baseDeadline.clone().add(1, unit).format("MMM DD, YY - HH:mm");
+            const newDeadline = baseDeadline.clone().add(1, unit).format("MMM DD, yy - HH:mm");
 
             let newStart = "";
             if (startDate) {
-                const d2 = window.moment(startDate, ["MMM DD, YY - HH:mm", "MMM DD, YY", "YYYY-MM-DD"], true);
-                if (d2.isValid()) newStart = d2.clone().add(1, unit).format("MMM DD, YY - HH:mm");
+                const d2 = window.moment(startDate, ["MMM DD, yy - HH:mm"], false);
+                if (d2.isValid()) newStart = d2.clone().add(1, unit).format("MMM DD, yy - HH:mm");
             }
             return { newDeadline, newStart };
         }
@@ -134,11 +134,19 @@ class TaskEvaluator {
 
         evaluate(currentPriority, size, deadline) {
             if (!deadline) return currentPriority;
-            const targetDate = window.moment(deadline, ["MMM DD, YY - HH:mm", "MMM DD, YY", "YYYY-MM-DD"], true).startOf('day');
-            if (!targetDate.isValid()) return currentPriority;
+            
+            // CORRECCIÓN: Quitamos el 'true' (modo estricto) para permitir flexibilidad
+            // y añadimos formatos ISO por si Obsidian formatea la fecha nativamente.
+            const targetDate = window.moment(deadline, ["MMM DD, yy - HH:mm"], false).startOf('day');
+            
+            if (!targetDate.isValid()) {
+                console.warn(`⚠️ [TaskEvaluator.UrgencyMotor] Fecha inválida detectada en una tarea: "${deadline}"`);
+                return currentPriority;
+            }
 
             const daysLeft = targetDate.diff(window.moment().startOf('day'), 'days');
             const targetPriority = this.calculateTarget(daysLeft, this.getSizeGroup(size));
+            
             return (this.getPriorityWeight(targetPriority) > this.getPriorityWeight(currentPriority)) ? targetPriority : currentPriority;
         }
     }
@@ -164,7 +172,7 @@ class TaskEvaluator {
         let loopCount    = 0;
         // [FIX #4] Límite subido a 30 para grafos profundos
         const MAX_LOOPS    = 30;
-        const nowFormatted = window.moment().format("MMM DD, YY - HH:mm");
+        const nowFormatted = window.moment().format("MMM DD, yy - HH:mm");
 
         do {
             anyChanges = false;
@@ -254,18 +262,20 @@ class TaskEvaluator {
                         evaluatedEndDate = nowFormatted;
                     }
                 }
-
                 // --- REGLA E: MOTOR DE URGENCIA ---
                 if (evaluatedStatus !== this.statusMap.done && evaluatedStatus !== this.statusMap.canceled) {
                     const currentPriority   = node.newPriority !== null ? node.newPriority : node.priority;
-                    const evaluatedPriority = this.urgencyMotor.evaluate(currentPriority, node.size, node.deadlineDate);
+                    
+                    // CORRECCIÓN: Usar el tamaño escalado dinámicamente por las subtareas
+                    const currentSize       = node.newSize !== null ? node.newSize : node.size;
+                    
+                    const evaluatedPriority = this.urgencyMotor.evaluate(currentPriority, currentSize, node.deadlineDate);
 
                     if (evaluatedPriority !== currentPriority) {
                         node.newPriority = evaluatedPriority;
                         anyChanges = true;
                     }
                 }
-
                 // --- REGLA F: HERENCIA DE PRIORIDAD (Bidireccional) ---
                 if (evaluatedStatus !== this.statusMap.done && evaluatedStatus !== this.statusMap.canceled) {
                     const currentPriority       = node.newPriority !== null ? node.newPriority : node.priority;
