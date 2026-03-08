@@ -1,39 +1,40 @@
+// ============================================================
+// update_frontmatter.js
+// ============================================================
 /**
- * update_frontmatter.js
- *
- * Macro de QuickAdd que actualiza propiedades del frontmatter de un archivo.
- * Recibe su configuración mediante variables:
- *   - variables.filePath   {string}  Ruta al archivo .md
- *   - variables.properties {Object}  Par clave-valor con los campos a actualizar
- *
- * Delega la lógica de fusión de arrays a Utils.updateFrontmatter.
+ * Actualiza propiedades del frontmatter de un archivo.
  */
 module.exports = async (params) => {
     const { app, variables } = params;
+    const CTRL = "UpdateFrontmatter";
+
+    try { customJS.SystemBootstrap.boot(); } catch (err) {
+        new Notice(`❌ Error crítico: ${err.message}`); return;
+    }
+
+    const { Utils, Messages, Logger } = customJS;
 
     if (!variables?.filePath || !variables?.properties) {
-        new Notice("❌ Faltan variables (filePath o properties) para actualizar el frontmatter.");
-        return;
+        new Notice(Messages.get("FRONTMATTER_MISSING_VARS")); return;
     }
 
     const { filePath, properties } = variables;
     const file = app.vault.getAbstractFileByPath(filePath);
 
     if (!file) {
-        new Notice(`❌ Archivo no encontrado: ${filePath}`);
-        return;
+        new Notice(Messages.get("FRONTMATTER_FILE_NOT_FOUND", filePath)); return;
     }
 
     if (file.extension !== 'md') {
-        new Notice(`❌ '${file.name}' no es un archivo Markdown.`);
-        return;
+        new Notice(Messages.get("FRONTMATTER_NOT_MARKDOWN", file.name)); return;
     }
 
     try {
-        await customJS.Utils.updateFrontmatter(app, file, properties);
-        new Notice(`✅ Frontmatter de '${file.basename}' actualizado.`);
-    } catch (error) {
-        console.error("Error al actualizar frontmatter:", error);
-        new Notice(`❌ Error al actualizar '${file.basename}'. Revisa la consola.`);
+        await Utils.updateFrontmatter(app, file, properties);
+        Logger.info(CTRL, `Frontmatter actualizado: "${file.basename}".`, { properties });
+        new Notice(Messages.get("FRONTMATTER_UPDATE_SUCCESS", file.basename));
+    } catch (err) {
+        Logger.error(CTRL, `Error actualizando frontmatter de "${file.basename}".`, { error: err.message });
+        new Notice(Messages.get("FRONTMATTER_UPDATE_ERROR", file.basename));
     }
 };

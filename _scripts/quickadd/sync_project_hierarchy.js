@@ -1,64 +1,84 @@
 /**
  * sync_project_hierarchy.js
+ * Capa de Infraestructura / Controlador
  *
- * Orquestador de sincronización de proyectos.
+ * Responsabilidades:
+ *   1. Boot del sistema
+ *   2. Sincronizar tareas primero (delegando a la macro de tareas)
+ *   3. Leer el vault y construir el mapa de proyectos en memoria
+ *   4. Pasar el mapa a ProjectEvaluator (dominio puro)
+ *   5. Persistir los cambios calculados
  */
 module.exports = async (params) => {
     const { app } = params;
+    const CTRL    = "SyncProjectHierarchy";
 
     // ── 0. BOOTSTRAP ──────────────────────────────────────────────────────
-    customJS.SystemBootstrap.boot();
-
-    if (!customJS?.FileClassMapper || !customJS?.Utils) {
-        new Notice("❌ Error: customJS o sus módulos no están cargados.");
+    try {
+        customJS.SystemBootstrap.boot();
+    } catch (err) {
+        new Notice(customJS?.Messages?.get("BOOTSTRAP_BOOT_ERROR", err.message) ?? `❌ Error crítico: ${err.message}`);
         return;
     }
 
-    const { Utils, ProjectEvaluator } = customJS;
+    const { Utils, ProjectEvaluator, Messages, Logger, Settings } = customJS;
     const quickAddApi = app.plugins.plugins.quickadd.api;
 
+    Logger.info(CTRL, "Iniciando sincronización de proyectos.");
+    new Notice(Messages.get("SYNC_PROJECT_START"));
+
     // ── 1. SINCRONIZAR TAREAS PRIMERO ─────────────────────────────────────
-    new Notice("⏳ Sincronizando jerarquía de tareas...");
     try {
         await quickAddApi.executeChoice("Sync Task Hierarchy");
         // Pausa para que Obsidian actualice su metadataCache tras los cambios
-        await Utils.sleep(800);
-    } catch (error) {
-        console.error("Error al sincronizar tareas:", error);
-        new Notice("❌ Error en 'Sync Task Hierarchy'. Revisa la consola.");
+        await Utils.sleep(Settings.SLEEP_AFTER_SYNC);
+    } catch (err) {
+        Logger.error(CTRL, "Error al ejecutar 'Sync Task Hierarchy'.", { error: err.message });
+        new Notice(Messages.get("SYNC_TASK_ERROR"));
         return;
     }
 
     // ── 2. CONSTRUIR MAPA DE PROYECTOS Y TAREAS ───────────────────────────
-    // [FIX V-10] Caché compartido para no iterar el vault dos veces
-    const fileCache = new Map();
-    const projects  = _buildProjectsMap(app, Utils, fileCache);
-    _mapTasksToProjects(app, projects, Utils, fileCache);
+    const fileCache = new Map(); // Caché compartido para toda la ejecución
+    const projects  = _buildProjectsMap(app, Utils, fileCache, Logger, CTRL);
+    _mapTasksToProjects(app, projects, Utils, fileCache, Logger, CTRL);
+
+    Logger.info(CTRL, "Mapa de proyectos construido.", {
+        projectCount: Object.keys(projects).length
+    });
 
     // ── 3. EVALUAR ────────────────────────────────────────────────────────
+    Logger.info(CTRL, "Ejecutando evaluación de dominio (ProjectEvaluator).");
     ProjectEvaluator.evaluate(projects);
 
     // ── 4. PERSISTIR CAMBIOS ──────────────────────────────────────────────
+    Logger.info(CTRL, "Persistiendo cambios en el vault.");
     const { updatedCount, archivedCount, priorityScaledCount } =
-        await _applyChanges(app, quickAddApi, projects);
+        await _applyChanges(app, quickAddApi, projects, Logger, CTRL);
 
     // ── FEEDBACK ──────────────────────────────────────────────────────────
+    Logger.info(CTRL, "Sincronización de proyectos completada.", {
+        updatedCount, archivedCount, priorityScaledCount
+    });
+
     if (updatedCount > 0) {
-        new Notice(`✅ ${updatedCount} proyectos sincronizados. (${archivedCount} archivados).`);
-        new Notice(`🔥 ${priorityScaledCount} proyectos escalaron su prioridad.`);
+        new Notice(Messages.get("SYNC_PROJECT_COMPLETE", {
+            updated:        updatedCount,
+            archived:       archivedCount,
+            priorityScaled: priorityScaledCount,
+        }));
     } else {
-        new Notice(`👍 Los proyectos están perfectamente sincronizados.`);
+        new Notice(Messages.get("SYNC_PROJECT_UP_TO_DATE"));
     }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CONSTRUCCIÓN DEL MAPA
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
+// CONSTRUCCIÓN DEL MAPA — I/O puro
+// =============================================================================
 
-function _buildProjectsMap(app, Utils, fileCache) {
+function _buildProjectsMap(app, Utils, fileCache, Logger, CTRL) {
     const projects = {};
 
-    // [FIX V-10] Pasar fileCache a getFilesByClass
     for (const file of Utils.getFilesByClass(app, 'project', fileCache)) {
         try {
             const fm = Utils.getFrontmatter(app, file);
@@ -80,15 +100,14 @@ function _buildProjectsMap(app, Utils, fileCache) {
                 newArchived  : null,
             };
         } catch (err) {
-            console.error(`[_buildProjectsMap] Error procesando "${file.basename}":`, err);
+            Logger.error(CTRL, `Error leyendo proyecto "${file.basename}" del vault.`, { error: err.message });
         }
     }
 
     return projects;
 }
 
-function _mapTasksToProjects(app, projects, Utils, fileCache) {
-    // [FIX V-10] Pasar fileCache a getFilesByClass
+function _mapTasksToProjects(app, projects, Utils, fileCache, Logger, CTRL) {
     for (const file of Utils.getFilesByClass(app, 'task', fileCache)) {
         try {
             const fm = Utils.getFrontmatter(app, file);
@@ -100,16 +119,16 @@ function _mapTasksToProjects(app, projects, Utils, fileCache) {
                 }
             }
         } catch (err) {
-            console.error(`[_mapTasksToProjects] Error procesando tarea "${file.basename}":`, err);
+            Logger.warn(CTRL, `Error mapeando tarea "${file.basename}" a proyectos.`, { error: err.message });
         }
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PERSISTENCIA
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
+// PERSISTENCIA — I/O puro
+// =============================================================================
 
-async function _applyChanges(app, quickAddApi, projects) {
+async function _applyChanges(app, quickAddApi, projects, Logger, CTRL) {
     let updatedCount        = 0;
     let archivedCount       = 0;
     let priorityScaledCount = 0;
@@ -122,9 +141,7 @@ async function _applyChanges(app, quickAddApi, projects) {
 
         if (!statusChanged && !endDateChanged && !archivedChanged && !priorityChanged) continue;
 
-        // [FIX V-9] try-catch individual por proyecto.
-        // Un fallo en processFrontMatter de un archivo no debe abortar
-        // el resto del bucle de 50+ proyectos.
+        // Try-catch individual — un fallo no aborta el resto del loop
         try {
             await app.fileManager.processFrontMatter(proj.file, (fm) => {
                 if (statusChanged)   fm.status   = proj.newStatus;
@@ -134,14 +151,16 @@ async function _applyChanges(app, quickAddApi, projects) {
             });
             updatedCount++;
 
+            Logger.debug(CTRL, `Proyecto actualizado: "${proj.file.basename}".`, {
+                statusChanged, priorityChanged, archivedChanged
+            });
+
             if (archivedChanged && proj.newArchived === true) {
                 await quickAddApi.executeChoice("Move By Archived", { value: proj.file.path });
                 archivedCount++;
             }
         } catch (err) {
-            console.error(
-                `[_applyChanges] Error persistiendo cambios en el proyecto "${proj.file.basename}":`, err
-            );
+            Logger.error(CTRL, `Error persistiendo cambios en proyecto "${proj.file.basename}".`, { error: err.message });
         }
     }
 

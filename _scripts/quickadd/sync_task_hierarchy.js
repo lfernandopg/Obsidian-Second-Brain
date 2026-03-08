@@ -1,69 +1,105 @@
+/**
+ * sync_task_hierarchy.js
+ * Capa de Infraestructura / Controlador
+ *
+ * Responsabilidades:
+ *   1. Boot del sistema
+ *   2. Leer el vault y construir el grafo de tareas en memoria
+ *   3. Pasar el grafo a TaskEvaluator (dominio puro)
+ *   4. Persistir los cambios calculados
+ *   5. Procesar recurrencias (I/O puro)
+ *
+ * NO contiene lógica de evaluación. Toda la lógica está en TaskEvaluator.
+ */
 module.exports = async (params) => {
     const { app, quickAddApi } = params;
+    const CTRL = "SyncTaskHierarchy";
 
     // ── 0. BOOTSTRAP ──────────────────────────────────────────────────────
-    customJS.SystemBootstrap.boot();
+    try {
+        customJS.SystemBootstrap.boot();
+    } catch (err) {
+        new Notice(customJS?.Messages?.get("BOOTSTRAP_BOOT_ERROR", err.message) ?? `❌ Error crítico: ${err.message}`);
+        return;
+    }
 
-    const { Utils, TaskEvaluator, FileClassMapper } = customJS;
+    const { Utils, TaskEvaluator, ProjectEvaluator, FileClassMapper, Messages, Logger, Settings } = customJS;
+
+    Logger.info(CTRL, "Iniciando sincronización de tareas.");
+    new Notice(Messages.get("SYNC_TASK_START"));
 
     // ── 1. MAPEAR PRIORIDADES DE PROYECTOS (TOP-DOWN) ─────────────────────
-    const fileCache = new Map();
-
-    // Instanciar el motor de urgencia de proyectos para evaluarlos en memoria
-    const projectUrgencyMotor = customJS.ProjectEvaluator.urgencyMotor
+    const fileCache = new Map(); // Caché compartido para toda la ejecución
 
     const allProjects       = Utils.getFilesByClass(app, 'project', fileCache);
     const projectPriorities = {};
+
+    Logger.info(CTRL, "Evaluando prioridades de proyectos en memoria.", { count: allProjects.length });
+
     for (const p of allProjects) {
-        const pFm = Utils.getFrontmatter(app, p);
-        if (pFm) {
-            // Evaluamos la prioridad del proyecto en memoria (por si su deadline está cerca)
-            const evaluatedPriority = projectUrgencyMotor.evaluate(pFm.priority, pFm.size, pFm.deadlineDate);
-            projectPriorities[p.basename] = evaluatedPriority;
+        try {
+            const pFm = Utils.getFrontmatter(app, p);
+            if (!pFm) continue;
+            projectPriorities[p.basename] = ProjectEvaluator.urgencyMotor.evaluate(
+                pFm.priority, pFm.size, pFm.deadlineDate
+            );
+        } catch (err) {
+            Logger.warn(CTRL, `Error evaluando prioridad del proyecto "${p.basename}".`, { error: err.message });
         }
     }
 
     // ── 2. CONSTRUIR GRAFO ────────────────────────────────────────────────
     const allTasks = Utils.getFilesByClass(app, 'task', fileCache);
-    const graph    = _buildGraph(app, allTasks, Utils);
+    Logger.info(CTRL, "Construyendo grafo de tareas.", { count: allTasks.length });
 
-    // ── 3. EVALUAR ESTADOS Y PRIORIDADES ──────────────────────────────────
+    const graph = _buildGraph(app, allTasks, Utils, Logger, CTRL);
+
+    // ── 3. DETECTAR CICLOS ────────────────────────────────────────────────
+    _detectCycles(graph, Logger, CTRL);
+
+    // ── 4. EVALUAR ESTADOS Y PRIORIDADES ──────────────────────────────────
+    Logger.info(CTRL, "Ejecutando evaluación de dominio (TaskEvaluator).");
     TaskEvaluator.evaluate(graph, projectPriorities);
 
-    // ── 4. PERSISTIR CAMBIOS ──────────────────────────────────────────────
+    // ── 5. PERSISTIR CAMBIOS ──────────────────────────────────────────────
+    Logger.info(CTRL, "Persistiendo cambios en el vault.");
     const { updatedCount, archivedCount, priorityScaledCount, sizeScaledCount } =
-        await _applyChanges(app, quickAddApi, graph);
+        await _applyChanges(app, quickAddApi, graph, Logger, CTRL);
 
-    // ── 5. PROCESAR RECURRENCIAS ──────────────────────────────────────────
+    // ── 6. PROCESAR RECURRENCIAS ──────────────────────────────────────────
+    Logger.info(CTRL, "Procesando recurrencias.");
     const recurrencesCreated = await _processRecurrences(
-        app,
-        graph,
-        FileClassMapper.STATUS_MAP,
-        TaskEvaluator.recurrenceMotor
+        app, graph, Settings, TaskEvaluator.recurrenceMotor, FileClassMapper, Logger, CTRL
     );
 
     // ── FEEDBACK CONSOLIDADO ──────────────────────────────────────────────
-    if (updatedCount > 0 || recurrencesCreated > 0) {
-        let msg = `✅ Sincronización completa:`;
-        if (updatedCount > 0)        msg += `\n🔄 ${updatedCount} tareas actualizadas.`;
-        if (archivedCount > 0)       msg += `\n📦 ${archivedCount} tareas archivadas.`;
-        if (priorityScaledCount > 0) msg += `\n🔥 ${priorityScaledCount} tareas escalaron su prioridad.`;
-        if (recurrencesCreated > 0)  msg += `\n♻️ ${recurrencesCreated} tareas recurrentes creadas.`;
-        if (sizeScaledCount > 0)     msg += `\n📐 ${sizeScaledCount} tareas recalcularon su tamaño.`;
-        new Notice(msg);
+    const hasChanges = updatedCount > 0 || recurrencesCreated > 0;
+
+    Logger.info(CTRL, "Sincronización completada.", {
+        updatedCount, archivedCount, priorityScaledCount, sizeScaledCount, recurrencesCreated
+    });
+
+    if (hasChanges) {
+        new Notice(Messages.get("SYNC_TASK_COMPLETE", {
+            updated:        updatedCount,
+            archived:       archivedCount,
+            priorityScaled: priorityScaledCount,
+            recurrences:    recurrencesCreated,
+            sizeScaled:     sizeScaledCount,
+        }));
     } else {
-        new Notice(`👍 Todo el sistema está perfectamente sincronizado y al día.`);
+        new Notice(Messages.get("SYNC_TASK_UP_TO_DATE"));
     }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CONSTRUCCIÓN DEL GRAFO
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
+// CONSTRUCCIÓN DEL GRAFO — I/O puro, sin lógica de evaluación
+// =============================================================================
 
-function _buildGraph(app, allTasks, Utils) {
+function _buildGraph(app, allTasks, Utils, Logger, CTRL) {
     const graph = {};
+
     for (const file of allTasks) {
-        // [FIX V-9 / anterior] try-catch individual por archivo para no abortar el grafo entero
         try {
             const fm = Utils.getFrontmatter(app, file);
             if (!fm) continue;
@@ -84,17 +120,19 @@ function _buildGraph(app, allTasks, Utils) {
                 projects             : Utils.getLinks(fm.project),
                 children             : [],
                 previousTasks        : [],
-                newStatus            : null,
-                newPriority          : null,
-                newSize              : null,
-                newEndDate           : undefined,
-                newArchived          : null,
+                // Campos de mutación — null = sin cambio, valor = cambio pendiente
+                newStatus    : null,
+                newPriority  : null,
+                newSize      : null,
+                newEndDate   : undefined,
+                newArchived  : null,
             };
         } catch (err) {
-            console.error(`[_buildGraph] Error procesando "${file.basename}":`, err);
+            Logger.error(CTRL, `Error leyendo tarea "${file.basename}" del vault.`, { error: err.message });
         }
     }
 
+    // Construir aristas inversas (children, previousTasks)
     for (const node of Object.values(graph)) {
         for (const parentName of node.parentTasks) {
             if (graph[parentName]) graph[parentName].children.push(node.file.basename);
@@ -104,28 +142,16 @@ function _buildGraph(app, allTasks, Utils) {
         }
     }
 
-    // [FIX V-8] Detectar ciclos en el grafo ANTES de evaluar.
-    // Un ciclo (A → B → A) impediría que anyChanges se estabilice, agotando
-    // MAX_LOOPS. Detectarlo aquí permite advertir al usuario con contexto claro.
-    _detectCycles(graph);
-
     return graph;
 }
 
-/**
- * [FIX V-8] Detección de ciclos mediante DFS con coloración (blanco/gris/negro).
- * - BLANCO (0): nodo no visitado.
- * - GRIS   (1): nodo en el stack de llamadas actual (back-edge = ciclo).
- * - NEGRO  (2): nodo completamente procesado.
- *
- * Solo emite console.warn; no lanza excepción para no abortar la sincronización
- * completa. El usuario puede corregir el ciclo y re-ejecutar.
- *
- * @param {Object} graph - Grafo de nodos de tareas
- */
-function _detectCycles(graph) {
+// =============================================================================
+// DETECCIÓN DE CICLOS — DFS Coloring (blanco/gris/negro)
+// =============================================================================
+
+function _detectCycles(graph, Logger, CTRL) {
     const WHITE = 0, GRAY = 1, BLACK = 2;
-    const color = {};
+    const color       = {};
     const cyclesFound = [];
 
     for (const k of Object.keys(graph)) color[k] = WHITE;
@@ -136,16 +162,11 @@ function _detectCycles(graph) {
 
         for (const childName of (graph[name]?.children ?? [])) {
             if (color[childName] === GRAY) {
-                // Encontramos un back-edge: hay un ciclo
                 const cycleStart = path.indexOf(childName);
-                const cyclePath  = [...path.slice(cycleStart), childName].join(' → ');
-                cyclesFound.push(cyclePath);
-                // Continúa para detectar todos los ciclos, no solo el primero
-                continue;
+                cyclesFound.push([...path.slice(cycleStart), childName].join(' → '));
+                continue; // No lanzar excepción — continuar para detectar todos los ciclos
             }
-            if (color[childName] === WHITE) {
-                dfs(childName, path);
-            }
+            if (color[childName] === WHITE) dfs(childName, path);
         }
 
         path.pop();
@@ -157,23 +178,23 @@ function _detectCycles(graph) {
     }
 
     if (cyclesFound.length > 0) {
+        Logger.warn(CTRL, `Se detectaron ${cyclesFound.length} ciclo(s) en el grafo de tareas.`, { cycles: cyclesFound });
         console.warn(
-            `[TaskGraph] ⚠️ Se detectaron ${cyclesFound.length} ciclo(s) en el grafo de tareas. ` +
-            `Esto puede causar evaluaciones incompletas. Revisa los campos 'parentTask' de estas tareas:\n` +
+            `[${CTRL}] ⚠️ ${cyclesFound.length} ciclo(s) detectados en parentTask:\n` +
             cyclesFound.map((c, i) => `  ${i + 1}. ${c}`).join('\n')
         );
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PERSISTENCIA
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
+// PERSISTENCIA — I/O puro, aplica los cambios calculados por el dominio
+// =============================================================================
 
-async function _applyChanges(app, quickAddApi, graph) {
-    let updatedCount       = 0;
-    let archivedCount      = 0;
+async function _applyChanges(app, quickAddApi, graph, Logger, CTRL) {
+    let updatedCount        = 0;
+    let archivedCount       = 0;
     let priorityScaledCount = 0;
-    let sizeScaledCount    = 0;
+    let sizeScaledCount     = 0;
 
     for (const node of Object.values(graph)) {
         const statusChanged   = node.newStatus   !== null      && node.newStatus   !== node.status;
@@ -184,7 +205,7 @@ async function _applyChanges(app, quickAddApi, graph) {
 
         if (!statusChanged && !endDateChanged && !archivedChanged && !priorityChanged && !sizeChanged) continue;
 
-        // [FIX ADICIONAL] try-catch individual para que un fallo no aborte el resto del bucle
+        // Try-catch individual por archivo — un fallo no aborta el resto del loop
         try {
             await app.fileManager.processFrontMatter(node.file, (fm) => {
                 if (statusChanged)   fm.status   = node.newStatus;
@@ -195,29 +216,30 @@ async function _applyChanges(app, quickAddApi, graph) {
             });
             updatedCount++;
 
+            Logger.debug(CTRL, `Tarea actualizada: "${node.file.basename}".`, {
+                statusChanged, priorityChanged, sizeChanged, archivedChanged
+            });
+
             if (archivedChanged && node.newArchived === true) {
                 await quickAddApi.executeChoice("Move By Archived", { value: node.file.path });
                 archivedCount++;
             }
         } catch (err) {
-            console.error(`[_applyChanges] Error persistiendo cambios en "${node.file.basename}":`, err);
+            Logger.error(CTRL, `Error persistiendo cambios en "${node.file.basename}".`, { error: err.message });
         }
     }
+
     return { updatedCount, archivedCount, priorityScaledCount, sizeScaledCount };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
 // MOTOR DE I/O: CLONACIÓN DE RECURRENCIAS
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
 
-async function _processRecurrences(app, graph, statusMap, motor) {
+async function _processRecurrences(app, graph, Settings, motor, FileClassMapper, Logger, CTRL) {
     let createdCount = 0;
-    const today = window.moment();
-
-    // [FIX #3] RegEx estricta para quitar SOLO la fecha final YYYY-MM-DD
-    // Captura opcionalmente el separador " - " inmediatamente antes de la fecha.
-    // Ejemplo: "Proyecto X - Fase 1 - 2026-03-05"  →  "Proyecto X - Fase 1"
-    const DATE_SUFFIX_REGEX = /\s*-\s*\d{4}-\d{2}-\d{2}$/;
+    const today      = window.moment();
+    const statusMap  = Settings.STATUS_MAP;
 
     for (const node of Object.values(graph)) {
         if (node.archived || !node.recurrence || node.nextRecurrenceCreated) continue;
@@ -228,16 +250,15 @@ async function _processRecurrences(app, graph, statusMap, motor) {
             continue;
         }
 
+        // Try-catch individual — un fallo no aborta el procesamiento de recurrencias
         try {
             const { newDeadline, newStart } = motor.calculateNextDates(
                 node.deadlineDate, node.startDate, node.recurrence
             );
 
-            const folderPath = customJS.FileClassMapper.getFolder("task");
-
-            // [FIX #3] Usar RegEx en lugar de split(" - ")[0]
-            const baseName    = node.file.basename.replace(DATE_SUFFIX_REGEX, "").trim();
-            const newFileName = `${baseName} - ${window.moment(newDeadline, "MMM DD, YY - HH:mm").format("YYYY-MM-DD")}`;
+            const folderPath  = FileClassMapper.getFolder("task");
+            const baseName    = node.file.basename.replace(Settings.DATE_SUFFIX_REGEX, "").trim();
+            const newFileName = `${baseName} - ${window.moment(newDeadline, Settings.DATE_FORMAT_DATETIME).format(Settings.DATE_FORMAT_ISO)}`;
             const newFilePath = `${folderPath}/${newFileName}.md`;
 
             if (await app.vault.adapter.exists(newFilePath)) continue;
@@ -246,12 +267,11 @@ async function _processRecurrences(app, graph, statusMap, motor) {
             const newFile         = await app.vault.create(newFilePath, originalContent);
 
             await app.fileManager.processFrontMatter(newFile, (newFm) => {
-                newFm.status               = statusMap.planned;
-                newFm.startDate            = newStart;
-                newFm.deadlineDate         = newDeadline;
-                newFm.endDate              = "";
-                newFm.createdDate          = today.format("MMM DD, YY - HH:mm");
-                // [FIX ADICIONAL] La nueva tarea comienza sin marca de recurrencia creada
+                newFm.status                = statusMap.planned;
+                newFm.startDate             = newStart;
+                newFm.deadlineDate          = newDeadline;
+                newFm.endDate               = "";
+                newFm.createdDate           = today.format(Settings.DATE_FORMAT_DATETIME);
                 newFm.nextRecurrenceCreated = false;
             });
 
@@ -260,9 +280,12 @@ async function _processRecurrences(app, graph, statusMap, motor) {
             });
 
             createdCount++;
+            Logger.info(CTRL, `Recurrencia creada: "${newFileName}".`, { baseName, newDeadline });
+
         } catch (err) {
-            console.error(`[_processRecurrences] Error clonando recurrencia de "${node.file.basename}":`, err);
+            Logger.error(CTRL, `Error clonando recurrencia de "${node.file.basename}".`, { error: err.message });
         }
     }
+
     return createdCount;
 }

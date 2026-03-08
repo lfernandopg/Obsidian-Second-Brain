@@ -1,46 +1,58 @@
+// =========================================================================
+// 📊 CLASE: TABLE
+// Renderiza tablas Dataview en las plantillas del vault.
+// Recibe Settings y FileClassMapper como dependencias inyectadas.
+// =========================================================================
 class Table {
+
     constructor() {
+        // Constructor vacío — requerimiento CustomJS
         this.isInitialized = false;
-        this.config = null;
-        this.statusMap = null;
+        this._settings     = null;
+        this._mapper       = null;
     }
 
+    // =========================================================================
+    // INIT — Recibe Settings + FileClassMapper
+    // =========================================================================
+
     /**
-     * Inyecta las dependencias necesarias.
-     * Llamado por SystemBootstrap.boot().
+     * @param {Settings}        settings
+     * @param {FileClassMapper} mapper
      */
-    init(tablesConfig, statusMap) {
-        this.config = tablesConfig;
-        this.statusMap = statusMap;
+    init(settings, mapper) {
+        if (!settings?.isInitialized) {
+            throw new Error("[Table] Se requiere una instancia de Settings inicializada.");
+        }
+        if (!mapper?.isInitialized) {
+            throw new Error("[Table] Se requiere una instancia de FileClassMapper inicializada.");
+        }
+        this._settings = settings;
+        this._mapper   = mapper;
         this.isInitialized = true;
     }
 
     _checkInit() {
         if (!this.isInitialized) {
-            throw new Error("Table no ha sido inicializado. Llama a customJS.SystemBootstrap.boot() primero.");
+            throw new Error("[Table] No inicializado. Llama a customJS.SystemBootstrap.boot() primero.");
         }
     }
 
     // ─────────────────────────────────────────────
-    // [FIX #1] GUARD CLAUSE PARA METADATA MENU
-    // Centralizado aquí para no repetirlo en cada método público.
-    // Devuelve la función `fieldModifier` o null si el plugin no está listo.
+    // Metadata Menu — Guard centralizado
     // ─────────────────────────────────────────────
 
     /**
      * Obtiene el fieldModifier de Metadata Menu de forma segura.
-     * @returns {Function|null} La función fieldModifier, o null si el plugin no está disponible.
+     * @returns {Function|null}
      */
     _getFieldModifier() {
         const plugin = app.plugins?.plugins?.['metadata-menu'];
-        if (!plugin?.api?.fieldModifier) {
-            return null;
-        }
-        return plugin.api.fieldModifier;
+        return plugin?.api?.fieldModifier ?? null;
     }
 
     // ─────────────────────────────────────────────
-    // CORE – CONSTRUCCIÓN DE FILAS
+    // CORE — Construcción de filas
     // ─────────────────────────────────────────────
 
     _buildRow(dv, p, fields, Utils, f) {
@@ -48,11 +60,10 @@ class Table {
             switch (field) {
                 case 'fileLink':      return p.file.link;
                 case 'archiveButton': return f ? Utils.createArchiveButton(dv, p, f) : "⚠️ MM";
-                case 'progress':      return this._progressBar(p, dv, this.statusMap);
+                case 'progress':      return this._progressBar(p, dv);
                 case 'startDate':     return p.startDate    || "-";
                 case 'endDate':       return p.endDate      || "-";
                 case 'deadlineDate':  return p.deadlineDate || "-";
-                // [FIX ADICIONAL] Campo genérico: si f es null, muestra el valor raw o "-"
                 default:
                     if (!f) return p[field] ?? "-";
                     return f(dv, p, field);
@@ -60,15 +71,18 @@ class Table {
         });
     }
 
-    _progressBar(p, dv, s) {
+    _progressBar(p, dv) {
         if (p.fileClass !== 'project') return "-";
 
-        const tasks = dv.pages().where(t => t.fileClass === 'task' && t.project?.path === p.file.path);
+        const statusMap = this._settings.STATUS_MAP;
+        const tasks     = dv.pages().where(t => t.fileClass === 'task' && t.project?.path === p.file.path);
 
-        if (tasks.length === 0) return `0% <progress style="max-width: 65px" value="0" max="100"></progress>`;
+        if (tasks.length === 0) {
+            return `0% <progress style="max-width: 65px" value="0" max="100"></progress>`;
+        }
 
-        const doneTasks = tasks.filter(t => t.status === s.done || t.status === s.canceled);
-        const percent = Math.round((doneTasks.length / tasks.length) * 100);
+        const doneTasks = tasks.filter(t => t.status === statusMap.done || t.status === statusMap.canceled);
+        const percent   = Math.round((doneTasks.length / tasks.length) * 100);
 
         return `${percent}% <progress style="max-width: 65px" value="${percent}" max="100"></progress>`;
     }
@@ -82,30 +96,18 @@ class Table {
         );
     }
 
-    // ─────────────────────────────────────────────
-    // HELPER INTERNO – renderizado con guard de Metadata Menu
-    // Evita duplicar el mismo bloque try/warn en cada método público.
-    // ─────────────────────────────────────────────
-
     /**
      * Renderiza una tabla con protección ante fallo de Metadata Menu.
-     * Si el plugin no está disponible, muestra un aviso en texto plano
-     * en lugar de crashear toda la vista.
-     *
-     * @param {DataviewAPI} dv
-     * @param {string}      headerText    - Título de la sección (ej. "⏳ Active Projects")
-     * @param {Function}    queryFn       - () => DataArray — páginas a mostrar
-     * @param {Object}      tableConfig   - Configuración de headers/fields
-     * @param {Utils}       Utils
+     * En caso de error, usa Messages para el texto de degradación elegante.
      */
     _renderSafe(dv, headerText, queryFn, tableConfig, Utils) {
-        // [FIX #1] Guard clause centralizado
         const f = this._getFieldModifier();
         if (!f) {
-            dv.paragraph(
-                `⚠️ **Metadata Menu no disponible.** La tabla "${headerText}" no puede renderizarse ` +
-                `hasta que el plugin termine de cargar. Recarga la nota o espera unos segundos.`
-            );
+            // Degradación elegante: texto plano en lugar de crash
+            const msg = customJS?.Messages?.isInitialized
+                ? customJS.Messages.get("TABLE_METADATA_MENU_UNAVAILABLE", headerText)
+                : `⚠️ Metadata Menu no disponible para "${headerText}".`;
+            dv.paragraph(msg);
             return;
         }
 
@@ -114,19 +116,23 @@ class Table {
             pages = queryFn();
         } catch (err) {
             console.error(`[Table._renderSafe] Error al consultar páginas para "${headerText}":`, err);
-            dv.paragraph(`❌ Error al cargar datos para "${headerText}". Revisa la consola.`);
+            const msg = customJS?.Messages?.isInitialized
+                ? customJS.Messages.get("TABLE_QUERY_ERROR", headerText)
+                : `❌ Error al cargar datos para "${headerText}". Revisa la consola.`;
+            dv.paragraph(msg);
             return;
         }
 
         this._renderTable(dv, pages, headerText, tableConfig, Utils, f);
     }
 
-    // ─────────────────────────────────────────────
-    // API PÚBLICA – VISTAS POR ÁREA
-    // ─────────────────────────────────────────────
+    // =========================================================================
+    // API PÚBLICA — Vistas por Área
+    // =========================================================================
 
     showActiveProjectsByArea(dv, area, projectFolder, Utils) {
         this._checkInit();
+        const statusMap = this._settings.STATUS_MAP;
         this._renderSafe(
             dv,
             "⏳ Active Projects",
@@ -134,17 +140,18 @@ class Table {
                 .where(p =>
                     p.fileClass === "project" &&
                     p.area?.path === area.file.path &&
-                    p.status !== this.statusMap.done &&
-                    p.status !== this.statusMap.canceled &&
+                    p.status !== statusMap.done &&
+                    p.status !== statusMap.canceled &&
                     p.archived !== true
                 ),
-            this.config.activeProjects,
+            this._settings.TABLES_CONFIG.activeProjects,
             Utils
         );
     }
 
     showDoneProjectsByArea(dv, area, projectFolder, archivedProjectFolder, Utils) {
         this._checkInit();
+        const statusMap = this._settings.STATUS_MAP;
         this._renderSafe(
             dv,
             "✅ Completed Projects",
@@ -152,15 +159,16 @@ class Table {
                 .where(p =>
                     p.fileClass === "project" &&
                     p.area?.path === area.file.path &&
-                    p.status === this.statusMap.done
+                    p.status === statusMap.done
                 ),
-            this.config.doneProjects,
+            this._settings.TABLES_CONFIG.doneProjects,
             Utils
         );
     }
 
     showActiveTasksByArea(dv, area, taskFolder, Utils) {
         this._checkInit();
+        const statusMap = this._settings.STATUS_MAP;
         this._renderSafe(
             dv,
             "⏳ Active Tasks",
@@ -168,17 +176,18 @@ class Table {
                 .where(p =>
                     p.fileClass === "task" &&
                     p.area?.path === area.file.path &&
-                    p.status !== this.statusMap.done &&
-                    p.status !== this.statusMap.canceled &&
+                    p.status !== statusMap.done &&
+                    p.status !== statusMap.canceled &&
                     p.archived !== true
                 ),
-            this.config.activeTasks,
+            this._settings.TABLES_CONFIG.activeTasks,
             Utils
         );
     }
 
     showDoneTasksByArea(dv, area, taskFolder, archivedTaskFolder, Utils) {
         this._checkInit();
+        const statusMap = this._settings.STATUS_MAP;
         this._renderSafe(
             dv,
             "✅ Completed Tasks",
@@ -186,9 +195,9 @@ class Table {
                 .where(p =>
                     p.fileClass === "task" &&
                     p.area?.path === area.file.path &&
-                    p.status === this.statusMap.done
+                    p.status === statusMap.done
                 ),
-            this.config.doneTasks,
+            this._settings.TABLES_CONFIG.doneTasks,
             Utils
         );
     }
@@ -205,7 +214,7 @@ class Table {
                     const areasArr = Array.isArray(p.areas) ? p.areas : [p.areas];
                     return areasArr.some(a => a?.path === area.file.path);
                 }),
-            this.config.areaResources,
+            this._settings.TABLES_CONFIG.areaResources,
             Utils
         );
     }

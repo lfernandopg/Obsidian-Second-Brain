@@ -1,69 +1,89 @@
+// =========================================================================
+// 🗂️ CLASE: FILE CLASS MAPPER
+// Responsabilidad única: mapear fileClass keys → rutas, nombres, relaciones.
+//
+// NO lee el vault. NO accede a app.metadataCache.
+// Recibe la instancia de Settings como dependencia inyectada en init().
+// =========================================================================
 class FileClassMapper {
 
     constructor() {
-        this._loadSettings();
+        // Constructor vacío — requerimiento CustomJS
+        this.isInitialized = false;
+
+        // Pobladas en init()
+        this._settings        = null;
+        this.FOLDERS_MAP      = null;
+        this.ARCHIVED_FOLDERS_MAP = null;
+        this.TEMPLATE_PATH_MAP    = null;
+        this.CAPITALIZE_NAMES_MAP = null;
+        this.RELATIONS_MAP        = null;
+        this.RELATION_TO_SHOW_MAP = null;
+    }
+
+    // =========================================================================
+    // INIT — Recibe Settings inyectado
+    // =========================================================================
+
+    /**
+     * Inicializa el mapper con la instancia de Settings ya populizada.
+     *
+     * @param {Settings} settings - Instancia inicializada de Settings
+     * @throws {Error} Si settings no está inicializado
+     */
+    init(settings) {
+        if (!settings?.isInitialized) {
+            throw new Error("[FileClassMapper] Se requiere una instancia de Settings inicializada.");
+        }
+
+        this._settings = settings;
+
         this._buildFolderMaps();
+        this._buildTemplatePaths();
+        this._buildCapitalizeNames();
         this._buildRelationMaps();
-        this._loadValues();
-        this._loadTables();
+
+        this.isInitialized = true;
+    }
+
+    _checkInit() {
+        if (!this.isInitialized) {
+            throw new Error("[FileClassMapper] No inicializado. Llama a init(settings) primero.");
+        }
     }
 
     // ─────────────────────────────────────────────
-    // INIT – CARGA DE CONFIGURACIÓN
+    // PRIVADOS — Construcción de mapas
     // ─────────────────────────────────────────────
-
-    _loadSettings() {
-        const SETTINGS_PATH = '_config/settings.md';
-        const settingsFile = app.vault.getAbstractFileByPath(SETTINGS_PATH);
-        if (!settingsFile) throw new Error(`No se encontró el archivo de configuración: ${SETTINGS_PATH}`);
-        const fm = app.metadataCache.getFileCache(settingsFile)?.frontmatter;
-
-        this.FILE_CLASS_LIST    = fm?.fileClassList;
-        this.TEMPLATES_FOLDER   = fm?.templatesFolder;
-        this.PROJECTS_FOLDER    = fm?.projectsFolder;
-        this.AREAS_FOLDER       = fm?.areasFolder;
-        this.RESOURCES_FOLDER   = fm?.resourcesFolder;
-        this.ARCHIVES_FOLDER    = fm?.archivesFolder;
-        this.AUTHORS_FOLDER     = fm?.authorsFolder;
-        this.SOURCES_FOLDER     = fm?.sourcesFolder;
-        this.TASKS_FOLDER       = fm?.tasksFolder;
-        this.DAILIES_FOLDER     = fm?.dailiesFolder;
-
-        // Nombres de archivo de plantillas
-        this._templateFileNames = {
-            area     : fm?.areaTemplateFileName,
-            project  : fm?.projectTemplateFileName,
-            resource : fm?.resourceTemplateFileName,
-            task     : fm?.taskTemplateFileName,
-            author   : fm?.authorTemplateFileName,
-            source   : fm?.sourceTemplateFileName,
-            daily    : fm?.dailyTemplateFileName,
-        };
-    }
 
     _buildFolderMaps() {
-        const A = this.ARCHIVES_FOLDER;
+        const s = this._settings;
 
         this.FOLDERS_MAP = {
-            area     : this.AREAS_FOLDER,
-            project  : this.PROJECTS_FOLDER,
-            resource : this.RESOURCES_FOLDER,
-            task     : this.TASKS_FOLDER,
-            author   : this.AUTHORS_FOLDER,
-            source   : this.SOURCES_FOLDER,
-            daily    : this.DAILIES_FOLDER,
+            area     : s.AREAS_FOLDER,
+            project  : s.PROJECTS_FOLDER,
+            resource : s.RESOURCES_FOLDER,
+            task     : s.TASKS_FOLDER,
+            author   : s.AUTHORS_FOLDER,
+            source   : s.SOURCES_FOLDER,
+            daily    : s.DAILIES_FOLDER,
         };
 
         this.ARCHIVED_FOLDERS_MAP = Object.fromEntries(
-            Object.entries(this.FOLDERS_MAP).map(([k, v]) => [k, `${A}/${v}`])
+            Object.entries(this.FOLDERS_MAP).map(([k, v]) => [k, `${s.ARCHIVES_FOLDER}/${v}`])
         );
+    }
 
-        this.TEMPLATE_FILE_PATH_MAP = Object.fromEntries(
-            Object.entries(this._templateFileNames).map(([k, v]) => [
-                k, `${this.TEMPLATES_FOLDER}/${v}`
+    _buildTemplatePaths() {
+        const s = this._settings;
+        this.TEMPLATE_PATH_MAP = Object.fromEntries(
+            Object.entries(s.TEMPLATE_FILE_NAMES).map(([k, v]) => [
+                k, `${s.TEMPLATES_FOLDER}/${v}`
             ])
         );
+    }
 
+    _buildCapitalizeNames() {
         this.CAPITALIZE_NAMES_MAP = {
             area     : "Area",
             project  : "Project",
@@ -133,33 +153,25 @@ class FileClassMapper {
         };
     }
 
-    _loadValues() {
-        const VALUES_PATH = '_config/values.md';
-        const valuesFile = app.vault.getAbstractFileByPath(VALUES_PATH);
-        if (!valuesFile) throw new Error(`No se encontró: ${VALUES_PATH}`);
-        const fm = app.metadataCache.getFileCache(valuesFile)?.frontmatter ?? {};
+    // =========================================================================
+    // API PÚBLICA
+    // =========================================================================
 
-        this.STATUS_MAP   = fm.statusMap   ?? {};
-        this.PRIORITY_MAP = fm.priorityMap ?? {};
-        this.SIZE_MAP     = fm.taskSizeMap     ?? {};
-        this.ALL_VALUES   = fm;
-    }
+    getFolder(fileClass)           { this._checkInit(); return this.FOLDERS_MAP[fileClass]; }
+    getArchivedFolder(fileClass)   { this._checkInit(); return this.ARCHIVED_FOLDERS_MAP[fileClass]; }
+    getTemplatePath(fileClass)     { this._checkInit(); return this.TEMPLATE_PATH_MAP[fileClass]; }
+    getCapitalizeName(fileClass)   { this._checkInit(); return this.CAPITALIZE_NAMES_MAP[fileClass]; }
+    getRelations(fileClass)        { this._checkInit(); return this.RELATIONS_MAP[fileClass]; }
+    getRelationToShow(key)         { this._checkInit(); return this.RELATION_TO_SHOW_MAP[key]; }
 
-    _loadTables() {
-        const TABLES_PATH = '_config/tables.md';
-        const tablesFile = app.vault.getAbstractFileByPath(TABLES_PATH);
-        if (!tablesFile) throw new Error(`No se encontró: ${TABLES_PATH}`);
-        this.TABLES_CONFIG = app.metadataCache.getFileCache(tablesFile)?.frontmatter ?? {};
-    }
+    // Acceso de conveniencia a los mapas de valores (provienen de Settings)
+    get FILE_CLASS_LIST() { this._checkInit(); return this._settings.FILE_CLASS_LIST; }
+    get STATUS_MAP()      { this._checkInit(); return this._settings.STATUS_MAP; }
+    get PRIORITY_MAP()    { this._checkInit(); return this._settings.PRIORITY_MAP; }
+    get SIZE_MAP()        { this._checkInit(); return this._settings.TASK_SIZE_MAP; }
+    get ALL_VALUES()      { this._checkInit(); return this._settings.ALL_VALUES; }
+    get TABLES_CONFIG()   { this._checkInit(); return this._settings.TABLES_CONFIG; }
 
-    // ─────────────────────────────────────────────
-    // GETTERS PÚBLICOS
-    // ─────────────────────────────────────────────
-
-    getFolder(fileClass)           { return this.FOLDERS_MAP[fileClass]; }
-    getCapitalizeName(fileClass)   { return this.CAPITALIZE_NAMES_MAP[fileClass]; }
-    getArchivedFolder(fileClass)   { return this.ARCHIVED_FOLDERS_MAP[fileClass]; }
-    getTemplateFilePathMap(fileClass) { return this.TEMPLATE_FILE_PATH_MAP[fileClass]; }
-    getRelations(fileClass)        { return this.RELATIONS_MAP[fileClass]; }
-    getRelationToShow(key)         { return this.RELATION_TO_SHOW_MAP[key]; }
+    // Mantiene compatibilidad con el método antiguo (alias)
+    getTemplateFilePathMap(fileClass) { return this.getTemplatePath(fileClass); }
 }
