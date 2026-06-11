@@ -1,0 +1,226 @@
+---
+fileClass: daily
+mit:
+previusDaily:
+createdDate: Mar 05, 2026 - 23:55
+modifiedDate: Mar 05, 2026 - 23:55
+favorite: false
+archived: false
+---
+
+## 📅 Daily Note – Thursday, Aug 14
+*Recurso y guías para completar esta daily note satisfactoriamente*
+
+- 📒 [[Daily Schedule Guide]]
+- 📒 [[Daily Note Guide]]
+
+---
+## ⚔️ Voto del Guerrero (Intención Matutina)
+Frase poderosa para comenzar el día
+
+- 
+
+Lee tu lista de deseos [[Lista de Deseos 14-09-2025]]
+
+---
+## 🎯 Foco y Acciones Clave - **MIT:**
+Tabla con las tareas mas importantes del día
+
+---
+## 📊 Quick Log (Registro Rápido del Día)
+*Rellena esto al final del día. Rápido, sin pensar demasiado.*
+
+### [[💪 Body & Physical Health]]
+- **Hora de despertar**: (wakeUpTime::)
+- **Hora de dormir (ayer)**: (yesterdayBedTime::)
+- **Calidad de sueño**: (sleepQuality::) 
+- **Calidad de la dieta**: (dietQuality::)
+- **Nivel de hidratación**: (hydrationLevel::) 
+- **Nivel de ejercicio**: (exerciseLevel::) 
+- **Exposición a luz solar**: (sunlightExposure::) 
+- **Nivel de higiene**: (hygieneLevel::)
+- **Nivel de energía**: (energyLevel::)
+- **Nivel de vitalidad**: (vitalityLevel::)
+
+### [[🧘 Mental & Emotional Health]]
+- **Nivel de concentración**: (focusLevel::) 
+- **Minutos de meditación**: (meditationMinutes::)
+- **Gratitud aplicada**: (gratitudeLevel::)
+- **Estado de animo predominante**: (mood::) 
+- **Nivel de autocontrol**: (selfControlLevel::)
+- **Nivel de observación sensorial**: (sensoryLevel::)
+
+### [[👥 Family & Close Ties|👥 Family]] / [[💬 Friends & Social Circle|💬 Friends]] / [[🩷 Couple Relationship|🩷 Relationship]]
+- **Calidad de interacciones sociales**: (socialInteractionsQuality::)
+
+### [[👨‍💻 Current Work]]
+- **Horas de trabajo**: (workHours::)
+
+### [[💡 Self-Learning & Reading]]
+- **Páginas leídas**: (pagesRead::)
+
+### [[🎓 Formal Education]]
+- **Pomodoros (tesis)**: (thesisPomodoros::)
+
+### [[📈 Savings & Investments]]
+- **Nivel de Trading**: (tradingLevel::)
+
+### [[🧹 Home Organization & Maintenance]]
+- **Nivel de cuidado de tu entorno**: (environmentCareLevel::)
+
+### [[🧭 Personal Growth & Discipline]]
+- **Lapso PMO**: (pmoLapse::)
+- **Exceso redes sociales**: (socialMediaExcess::)
+- **Horas en las pantallas**: (screenHours::)
+
+---
+## ✍️ Bitácora del Día
+*Aquí va la narrativa de tus acciones concretas. ¿Qué pasó?*
+
+>[!description]- 🙏 **Gratitud**:
+> *¿Por qué te sientes agradecido hoy?*
+>
+> 1. 
+> 2. 
+> 3. 
+
+>[!description]- 📖 **Lectura**: 
+> *¿Que libros leíste hoy? ¿Qué idea principal te llevas de lo leído?*
+>
+> - 
+
+>[!description]- 🏛️ **Tesis**:
+> *¿Cuál fue el mayor avance o bloqueo?*
+>
+> - 
+
+>[!description]- 💼 **Trabajo actual**:
+> *¿Qué suceso o logro importante ocurrió en tu trabajo hoy y su impacto? ¿Tuviste dificultades?*
+>
+> - 
+
+>[!description]- 📈 **Trading**: 
+> *Describe tu sesión de trading si la tuviste. ¿Seguiste tu plan? ¿Cómo manejaste las emociones e impulsos, el miedo, avaricia (FOMO), frustración?*
+>
+> -   
+
+>[!description]- 🤝 **Experiencias Sociales**:
+> *Describe un momento social significativo de hoy (con familia, amigos, pareja, trabajo u otros). ¿Qué sentiste? ¿Cómo impactó tu día?*
+>
+> - 
+
+>[!description]- 👁️ **Observación Sensorial (Ancla al Presente)**: 
+> *Describe 5 cosas que veo, 4 que siento en mi cuerpo, 3 que oigo, 2 que huelo y 1 que saboreo*
+>
+> **Cosas que veo**:
+> 1. 
+> 2. 
+> 3. 
+> 4. 
+> 5. 
+>
+> **Cosas que siento en mi cuerpo fisicamente**:
+>
+> 1. 
+> 2. 
+> 3. 
+> 4. 
+>
+> **Cosas que oigo**:
+>
+> 1. 
+> 2. 
+> 3. 
+> 
+> **Cosas que huelo**:
+> 1. 
+> 2. 
+>
+> **Cosas que saboreo**:
+> 1. 
+
+---
+## 🪞 Cierre y Reflexión Nocturna
+*Esta es tu ceremonia de cierre. El espejo para confrontar y crecer.*
+
+### 🧠 1. Patrones y Conexiones (La Sección Más Importante) 
+*Aquí es donde los datos se convierten en sabiduría. Conecta los puntos entre tu Quick Log, tu Bitácora y cómo te sentiste. Responde con total honestidad.*
+
+>[!description] 🔋 **Energía y Mente (La Conexión Cuerpo-Mente)**:
+> **Análisis Físico:** Revisa tu `exerciseLevel` y `sleepQuality`. ¿Describe la sensación en tu cuerpo durante el día o noche. ¿Puedes trazar una línea directa hasta tu `energyLevel` y `mood` finales?
+> - 
+>
+> **Análisis de Combustible:** Mira tu `dietQuality` y `hydrationLevel`. Sé un detective: ¿Cómo impactó tu "combustible" de hoy en tu `energyLevel` y `mood`?
+> - 
+
+>[!description] 🧐 **Ansiedad y Enfoque (El Observador Interno)**:
+> **Identifica al Ladrón:** ¿Cuál fue el "ladrón de `focusLevel`" principal de hoy: un pensamiento recurrente (interno) o una distracción específica (externa)? Solo nómbralo.
+> - 
+>
+> **La Necesidad Tras la Ansiedad:** En los momentos de mayor ansiedad, ¿qué necesidad no satisfecha estaba gritando esa emoción? (¿Necesidad de certeza, de control, de conexión, de seguridad?).
+> - 
+>
+> **Tus Herramientas de Calma:** ¿Qué micro-hábito (`meditationMinutes`, `gratitude`, `sensoryObservation`) tuvo el mayor efecto (positivo, o negativo por su ausencia) en tu paz mental?
+> - 
+
+>[!description] 💪🏻 **Vitalidad y Autocontrol (El Guerrero Interior)**:
+> **Análisis de Vicios y Conductas:** Si tuviste un `pmoLapse`, `socialMediaExcess`, mala `dietQuality` o mal `sleepQuality`, describe aquí la "cadena de eventos" que te llevó allí. ¿Cuál fue el primer eslabón? ¿El aburrimiento? ¿El estrés? ¿La soledad? ¿Qué historia te contaste para darte permiso?
+> - 
+>
+> **El Costo de la Vitalidad:** Conecta el punto anterior con tu `vitalityLevel`. De 1 a 10, ¿Cuánto "costó" ese lapso a tu sensación de confianza, fuerza y energía masculina al final del día? Sé honesto.
+> - 
+>
+> **Fuentes de Poder:** En los momentos de alto `selfControlLevel`, ¿qué estabas haciendo? ¿Qué te dio la fuerza? Identifica tus "fuentes de poder" para la disciplina y anótalas.
+> - 
+
+### 🔍 2. Revisión Rápida
+
+**🟢 Logro del Día y Victorias**
+*¿Qué hiciste bien? ¿De qué te sientes orgulloso?*
+- 
+
+**🔴 Desafío y Lección**
+*¿Cuál fue el mayor obstáculo? ¿Qué aprendiste para mañana?*
+- 
+
+**🔥 Acción Futura Inmediata**
+*Basado en la reflexión de hoy, ¿cuál es la **única cosa** que harás diferente mañana para alinearte con tus objetivos?*
+- 
+
+### 💭 3.  Reestructuración Cognitiva
+>[!description]- **¿Hubo algún pensamiento tóxico hoy?**
+> *Si la respuesta es sí, usa la técnica de TCC a continuación. Si no, ignórala.*
+>
+> **1. Situación**: ¿Qué pasó exactamente? 
+> - 
+> 
+> **2. Pensamiento Automático y Creencia Central**: ¿Qué pasó por mi mente?
+> - 
+>
+> **3. Emoción y Nivel (1-10)**: ¿Qué sentí? ¿Qué tan intenso fue?
+> - 
+>
+> **4. Evidencia en Contra del Pensamiento**: Busca pruebas *objetivas* que contradigan tu pensamiento.
+> - 
+>
+> **5. Pensamiento Alternativo y Balanceado**: Formula una nueva perspectiva más realista. 
+> - 
+>
+> **6. Re-evaluación de la Emoción (1-10)**: ¿Cómo me siento ahora después de este análisis? 
+> - 
+
+### 📝 4. Adicionales
+- 
+
+
+
+
+
+
+
+
+
+
+
+
+
