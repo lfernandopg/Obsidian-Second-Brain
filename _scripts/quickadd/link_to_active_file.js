@@ -1,145 +1,103 @@
+// ============================================================
+// link_to_active_file.js
+// ============================================================
+/**
+ * Enlaza el archivo activo con una nota relacionada.
+ */
 module.exports = async (params) => {
     const { app, quickAddApi, variables } = params;
+    const CTRL = "LinkToActiveFile";
 
-    // 1. Blindaje Inicial: Validar customJS y dependencias
-    if (!customJS || !customJS.FileClassMapper || !customJS.Utils) {
-        new Notice("❌ Error: customJS o sus dependencias no están cargadas.");
-        return;
+    try { customJS.SystemBootstrap.boot(); } catch (err) {
+        new Notice(`❌ Error crítico: ${err.message}`); return;
     }
 
-    const { FileClassMapper, Utils } = customJS;
+    const { FileClassMapper, Utils, Messages, Logger, Settings } = customJS;
 
-    try {
-        // 2. Obtener contexto del archivo activo
-        const activeFile = app.workspace.getActiveFile();
-        if (!activeFile) {
-            new Notice("❌ No active file.");
-            return;
-        }
+    const activeFile = app.workspace.getActiveFile();
+    if (!activeFile) { new Notice(Messages.get("LINK_NO_ACTIVE_FILE")); return; }
 
-        const activeFileCache = app.metadataCache.getFileCache(activeFile);
-        const activeFileClass = activeFileCache?.frontmatter?.fileClass;
+    const activeFileFm    = Utils.getFrontmatter(app, activeFile);
+    const activeFileClass = activeFileFm?.fileClass;
 
-        if (!activeFileClass) {
-            new Notice(`❌ No 'fileClass' found in ${activeFile.basename}.`);
-            return;
-        }
-
-        // 3. Obtener y validar relaciones posibles desde el Mapper
-        const possibleRelations = FileClassMapper.getRelations(activeFileClass);
-
-        if (!Array.isArray(possibleRelations) || possibleRelations.length === 0) {
-            new Notice(`🤷‍♂️ No defined relations for fileClass '${activeFileClass}'.`);
-            return;
-        }
-
-        // 4. Preguntar al usuario qué desea crear/enlazar
-        const relationOptions = possibleRelations.map(rel => FileClassMapper.getRelationToShow(rel.relationToShow));
-        const selectedRelation = await quickAddApi.suggester(relationOptions, possibleRelations);
-
-        if (!selectedRelation) return; // Salida limpia si el usuario presiona ESC
-
-        const { fileClassRelation, propertyToUpdate, linkDirection } = selectedRelation;
-        
-        // Validar que la relación tenga los datos mínimos necesarios
-        if (!fileClassRelation || !propertyToUpdate) {
-            new Notice("❌ La relación seleccionada está mal configurada (faltan propiedades).");
-            return;
-        }
-
-        let relatedFilePath;
-        let relatedFile;
-
-        // 5. Flujo de Creación vs Selección de nota existente
-        if (variables && variables.create === true) {
-            const creationVars = {
-                fileClass: fileClassRelation,
-                result: { createdFilePath: null }
-            };
-            
-            // Llamamos al otro script blindado para crear la nota
-            await quickAddApi.executeChoice("Create By Template", creationVars);
-
-            const createdFilePath = creationVars.result?.createdFilePath;
-            if (!createdFilePath) {
-                // Si el usuario canceló la creación a medio camino, salimos en silencio
-                return; 
-            }
-            
-            // Validar que el archivo recién creado realmente exista en el vault
-            relatedFile = app.vault.getAbstractFileByPath(createdFilePath);
-            if (!relatedFile) {
-                throw new Error(`No se pudo encontrar el archivo recién creado en la ruta: ${createdFilePath}`);
-            }
-            relatedFilePath = createdFilePath;
-
-        } else {
-            // Filtrar archivos válidos para enlazar
-            const templatePath = FileClassMapper.getTemplateFilePathMap(fileClassRelation);
-            
-            const validFiles = app.vault.getMarkdownFiles().filter((file) => {
-                const metadata = app.metadataCache.getFileCache(file)?.frontmatter;
-                const fileClass = metadata?.fileClass;
-                const archived = metadata?.archived;
-                
-                return fileClass === fileClassRelation 
-                    && !archived 
-                    && file.path !== activeFile.path
-                    && file.path !== templatePath;
-            });
-
-            // Blindaje: Prevenir Suggester vacío
-            if (validFiles.length === 0) {
-                new Notice(`⚠️ No hay archivos de tipo '${fileClassRelation}' disponibles para enlazar.`);
-                return;
-            }
-
-            const fileNames = validFiles.map(f => f.basename);
-            const selectedFile = await quickAddApi.suggester(fileNames, validFiles);
-            
-            if (!selectedFile) return; // Cancelado por el usuario
-            
-            relatedFile = selectedFile;
-            relatedFilePath = selectedFile.path;
-        }
-
-        // 6. Preparar y ejecutar el enlazado según la dirección
-        let targetFilePath;
-        let propertiesToUpdate;
-        let linkText;
-        let targetFileName; // Para el mensaje de éxito
-
-        if (linkDirection === 'inward') {
-            // La nota NUEVA/RELACIONADA apunta a la ACTIVA
-            targetFilePath = relatedFilePath;
-            linkText = `[[${activeFile.basename}]]`;
-            propertiesToUpdate = { [propertyToUpdate]: linkText };
-            targetFileName = activeFile.basename; 
-
-        } else { 
-            // 'outward' (por defecto)
-            // La nota ACTIVA apunta a la NUEVA/RELACIONADA
-            targetFilePath = activeFile.path;
-            linkText = `[[${relatedFile.basename}]]`;
-            propertiesToUpdate = { [propertyToUpdate]: linkText };
-            targetFileName = relatedFile.basename;
-        }
-
-        // Pausa breve para asegurar que la caché de Obsidian indexe el archivo si fue recién creado
-        await Utils.sleep(500); 
-
-        // 7. Ejecutar actualización de frontmatter delegando a QuickAdd
-        await quickAddApi.executeChoice("Update Frontmatter", {
-            filePath: targetFilePath,
-            properties: propertiesToUpdate
-        });
-        
-        // Mensaje de éxito dinámico y claro
-        const linkedFromName = linkDirection === 'inward' ? relatedFile.basename : activeFile.basename;
-        new Notice(`🔗 Linked: ${linkedFromName} ➡️ ${targetFileName}`);
-
-    } catch (error) {
-        console.error("Error en script de enlazado:", error);
-        new Notice(`❌ Ocurrió un error al enlazar: ${error.message}`);
+    if (!activeFileClass) {
+        new Notice(Messages.get("LINK_NO_FILECLASS", activeFile.basename)); return;
     }
+
+    const possibleRelations = FileClassMapper.getRelations(activeFileClass);
+    if (!Array.isArray(possibleRelations) || possibleRelations.length === 0) {
+        new Notice(Messages.get("LINK_NO_RELATIONS", activeFileClass)); return;
+    }
+
+    const relationLabels   = possibleRelations.map(r => FileClassMapper.getRelationToShow(r.relationToShow));
+    const selectedRelation = await quickAddApi.suggester(relationLabels, possibleRelations);
+    if (!selectedRelation) return;
+
+    const { fileClassRelation, propertyToUpdate, linkDirection } = selectedRelation;
+
+    let relatedFile;
+    if (variables?.create === true) {
+        relatedFile = await _createRelatedFile(quickAddApi, activeFile, activeFileFm, fileClassRelation);
+    } else {
+        relatedFile = await _selectExistingFile(app, quickAddApi, activeFile, fileClassRelation, FileClassMapper);
+    }
+    if (!relatedFile) return;
+
+    await Utils.sleep(Settings.SLEEP_AFTER_FILE_OP);
+
+    const isInward       = linkDirection === 'inward';
+    const targetFilePath = isInward ? relatedFile.path   : activeFile.path;
+    const linkText       = isInward ? `[[${activeFile.basename}]]` : `[[${relatedFile.basename}]]`;
+
+    await quickAddApi.executeChoice("Update Frontmatter", {
+        filePath  : targetFilePath,
+        properties: { [propertyToUpdate]: linkText },
+    });
+
+    const from = isInward ? relatedFile.basename : activeFile.basename;
+    const to   = isInward ? activeFile.basename  : relatedFile.basename;
+
+    Logger.info(CTRL, `Enlace creado: "${from}" → "${to}".`, { propertyToUpdate, linkDirection });
+    new Notice(Messages.get("LINK_SUCCESS", from, to));
 };
+
+async function _createRelatedFile(quickAddApi, activeFile, activeFileFm, fileClassRelation) {
+    const inheritProps = {};
+    if (activeFileFm?.area)    inheritProps.area    = activeFileFm.area;
+    if (activeFileFm?.project) inheritProps.project = activeFileFm.project;
+
+    const creationVars = {
+        fileClass        : fileClassRelation,
+        result           : { createdFilePath: null },
+        inheritProperties: inheritProps,
+    };
+
+    await quickAddApi.executeChoice("Create By Template", creationVars);
+
+    const createdPath = creationVars.result?.createdFilePath;
+    if (!createdPath) return null;
+
+    const file = app.vault.getAbstractFileByPath(createdPath);
+    if (!file) throw new Error(`No se encontró el archivo recién creado: ${createdPath}`);
+    return file;
+}
+
+async function _selectExistingFile(app, quickAddApi, activeFile, fileClassRelation, FileClassMapper) {
+    const templatePath = FileClassMapper.getTemplatePath(fileClassRelation);
+    const { Messages } = customJS;
+
+    const validFiles = app.vault.getMarkdownFiles().filter(file => {
+        const fm = app.metadataCache.getFileCache(file)?.frontmatter;
+        return fm?.fileClass === fileClassRelation
+            && !fm?.archived
+            && file.path !== activeFile.path
+            && file.path !== templatePath;
+    });
+
+    if (validFiles.length === 0) {
+        new Notice(Messages.get("LINK_NO_FILES_AVAILABLE", fileClassRelation));
+        return null;
+    }
+
+    return quickAddApi.suggester(validFiles.map(f => f.basename), validFiles);
+}

@@ -85,6 +85,13 @@ fields:
       valuesFromDVQuery: Object.values(dv.page("_config/values").priorityMap)
     path: ""
     id: obt0T5
+  - name: size
+    type: Select
+    options:
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").projectSizeMap)
+    path: ""
+    id: prjSz1
   - name: createdDate
     type: DateTime
     options:

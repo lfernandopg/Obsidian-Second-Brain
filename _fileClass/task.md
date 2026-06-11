@@ -26,7 +26,7 @@ fieldsOrder:
   - ainYKk
   - MUtO0S
   - GQpBlY
-version: "2.46"
+version: "2.47"
 fields:
   - name: name
     type: Input
@@ -112,7 +112,7 @@ fields:
     type: Select
     options:
       sourceType: ValuesFromDVQuery
-      valuesFromDVQuery: Object.values(dv.page("_config/values").sizeMap)
+      valuesFromDVQuery: Object.values(dv.page("_config/values").taskSizeMap)
     path: ""
     id: aFd3Xx
   - name: parentTask
@@ -168,4 +168,16 @@ fields:
       valuesFromDVQuery: Object.values(dv.page("_config/values").statusMap)
     path: ""
     id: PPd9ek
+  - name: recurrence
+    type: Select
+    options:
+      sourceType: ValuesFromDVQuery
+      valuesFromDVQuery: Object.values(dv.page("_config/values").recurrenceMap)
+    path: ""
+    id: R3curr
+  - name: nextRecurrenceCreated
+    type: Boolean
+    options: {}
+    path: ""
+    id: N3xtRc
 ---

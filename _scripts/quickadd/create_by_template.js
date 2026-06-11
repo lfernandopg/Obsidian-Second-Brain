@@ -1,86 +1,76 @@
+// ============================================================
+// create_by_template.js
+// ============================================================
+/**
+ * Crea una nueva nota a partir de la plantilla del fileClass indicado.
+ */
 module.exports = async (params) => {
     const { app, quickAddApi, variables } = params;
+    const CTRL = "CreateByTemplate";
 
-    // 1. Blindaje Inicial: Validar que customJS y sus módulos estén cargados
-    if (!customJS || !customJS.FileClassMapper || !customJS.Utils) {
-        new Notice("❌ Error: customJS o sus módulos no están cargados.");
-        return;
+    try { customJS.SystemBootstrap.boot(); } catch (err) {
+        new Notice(`❌ Error crítico: ${err.message}`); return;
     }
 
-    const { FileClassMapper, Utils } = customJS;
+    const { FileClassMapper, Utils, Messages, Logger, Settings } = customJS;
+
+    // ── SELECCIONAR FILECLASS ─────────────────────────────────────────────
     let fileClass = variables?.fileClass;
 
-    // 2. Selección de FileClass con manejo de cancelación (Escape)
-    if (!fileClass || !FileClassMapper.FILE_CLASS_LIST.includes(fileClass)) {
-        const capitalizeNames = Object.values(FileClassMapper.CAPITALIZE_NAMES_MAP);
-        const fileClassList = Object.keys(FileClassMapper.CAPITALIZE_NAMES_MAP);
-        
-        fileClass = await quickAddApi.suggester(capitalizeNames, fileClassList);
-        
-        // Salida limpia si el usuario presiona ESC
-        if (!fileClass) {
-            console.log("Creación de archivo cancelada por el usuario.");
-            return; 
-        }
+    if (!fileClass || !Settings.FILE_CLASS_LIST.includes(fileClass)) {
+        const labels  = Object.values(FileClassMapper.CAPITALIZE_NAMES_MAP);
+        const classes = Object.keys(FileClassMapper.CAPITALIZE_NAMES_MAP);
+        fileClass = await quickAddApi.suggester(labels, classes);
+        if (!fileClass) return;
     }
-    
-    // 3. Captura del nombre (Corrección de variable local: 'let fileName')
-    let fileName = await quickAddApi.inputPrompt(`Create new ${fileClass}`);
-    
-    // Salida limpia si el usuario cancela el prompt
-    if (!fileName) return; 
 
-    // 4. Sanitización del nombre de archivo para evitar errores del SO
+    // ── CAPTURAR Y SANITIZAR NOMBRE ───────────────────────────────────────
+    let fileName = await quickAddApi.inputPrompt(`Crear nuevo ${FileClassMapper.getCapitalizeName(fileClass)}`);
+    if (!fileName) return;
+
     fileName = fileName.trim().replace(/[\\/:*?"<>|]/g, '');
-    if (fileName.length === 0) {
-        new Notice("❌ El nombre proporcionado contiene caracteres inválidos o está vacío.");
-        return;
+    if (!fileName) {
+        new Notice(Messages.get("CREATE_INVALID_NAME")); return;
     }
-    
-    const templateFilePath = FileClassMapper.getTemplateFilePathMap(fileClass);
-    const folderPath = FileClassMapper.getFolder(fileClass);
-    const fileToCreatePath = `${folderPath}/${fileName}.md`;
 
+    // ── RUTAS ─────────────────────────────────────────────────────────────
+    const templatePath = FileClassMapper.getTemplatePath(fileClass);
+    const folderPath   = FileClassMapper.getFolder(fileClass);
+    const fileToCreate = `${folderPath}/${fileName}.md`;
+
+    // ── VALIDACIONES ──────────────────────────────────────────────────────
+    const templateFile = app.vault.getAbstractFileByPath(templatePath);
+    if (!templateFile) {
+        new Notice(Messages.get("CREATE_TEMPLATE_NOT_FOUND", templatePath)); return;
+    }
+
+    if (await app.vault.adapter.exists(fileToCreate)) {
+        new Notice(Messages.get("CREATE_FILE_EXISTS", fileName)); return;
+    }
+
+    // ── CREAR NOTA ────────────────────────────────────────────────────────
     try {
-        // 5. Validar existencia de la plantilla tempranamente
-        const templateFile = app.vault.getAbstractFileByPath(templateFilePath);
-        if (!templateFile) {
-            throw new Error(`Template not found at ${templateFilePath}`);
-        }
+        await Utils.ensureFolderExists(app, folderPath);
 
-        // 6. Verificar si la carpeta destino existe, si no, crearla
-        const folderExists = await app.vault.adapter.exists(folderPath);
-        if (!folderExists) {
-            await app.vault.createFolder(folderPath);
-        }
-
-        // 7. Prevención de sobreescritura (Si el archivo ya existe)
-        const fileExists = await app.vault.adapter.exists(fileToCreatePath);
-        if (fileExists) {
-            new Notice(`⚠️ El archivo ya existe: ${fileName}.md`);
-            return; // Detener ejecución para no pisar la nota existente
-        }
-
-        // 8. Crear la nueva nota
         const templateContent = await app.vault.read(templateFile);
-        const newFile = await app.vault.create(fileToCreatePath, templateContent);
-        
-        // Mostrar notificación de éxito
-        new Notice(`✅ Successfully ${fileClass} created at ${folderPath}/`);
-        
-        // Abrir la nueva nota en una nueva ventana
+        const newFile         = await app.vault.create(fileToCreate, templateContent);
+
+        const inheritProps = variables?.inheritProperties ?? {};
+        if (Object.keys(inheritProps).length > 0) {
+            await Utils.updateFrontmatter(app, newFile, inheritProps);
+        }
+
+        Logger.info(CTRL, `Nota creada: "${fileName}".`, { fileClass, folderPath });
+        new Notice(Messages.get("CREATE_SUCCESS", FileClassMapper.getCapitalizeName(fileClass), folderPath));
+
         const newLeaf = app.workspace.getLeaf(true);
         await newLeaf.openFile(newFile);
+        await Utils.sleep(Settings.SLEEP_AFTER_FILE_OP);
 
-        await Utils.sleep(500);
+        if (variables?.result) variables.result.createdFilePath = fileToCreate;
 
-        // 9. Retorno seguro de variables
-        if (variables && variables.result) {
-            variables.result.createdFilePath = fileToCreatePath;
-        }
-        
-    } catch (error) {
-        console.error("Error creating note:", error);
-        new Notice(`❌ Failed to create note: ${error.message}`);
+    } catch (err) {
+        Logger.error(CTRL, `Error creando nota "${fileName}".`, { error: err.message });
+        new Notice(Messages.get("CREATE_ERROR", err.message));
     }
 };

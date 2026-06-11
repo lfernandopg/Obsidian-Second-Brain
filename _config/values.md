@@ -20,7 +20,12 @@ priorityMap:
     medium: 🔵 Medium
     high: 🟡 High
     critical: 🔴 Critical
-sizeMap:
+recurrenceMap:
+    daily: 🔁 Diario
+    weekly: 📅 Semanal
+    monthly: 🗓️ Mensual
+    yearly: 🎂 Anual
+taskSizeMap:
     very_small: 📌 Very Small
     small: 📝 Small
     medium: 📁 Medium
@@ -28,6 +33,12 @@ sizeMap:
     very_large: 📦 Very Large
     huge: 🏗️ Huge
     epic: 🚀 Epic
+projectSizeMap:
+    sprint: 🏃 Sprint
+    month: 🗓️ Mensual
+    quarter: 🎯 Trimestral
+    half_year: 🏔️ Semestral
+    year: 🌍 Anual
 referenceStatusMap:
     inbox: ⚪️ Inbox
     to_review: 🔵 To Review
